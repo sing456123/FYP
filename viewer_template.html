@@ -24,8 +24,8 @@ input[type=number]{width:95px} h4{margin:10px 0 4px}
  <h4>Stats vs reference (all epochs, converged only)</h4><table id="stats"></table>
 </div>
 <script>
-const D=__DATA__, N=D[0].lat.length, COL=["#999","#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#a65628"];
-const on=D.map((_,i)=>i>0), $=id=>document.getElementById(id);
+const D=__DATA__, N=D[0].lat.length, COL=["#999","#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#a65628","#f781bf"];
+const on=D.map(()=>true), $=id=>document.getElementById(id);
 const rad=Math.PI/180, A=6378137, E2=6.69437999014e-3;
 let ref; // {lat,lon,h}
 const med=a=>{const s=[...a].sort((x,y)=>x-y);return s[s.length>>1]};
@@ -47,7 +47,7 @@ const tr=D.map((c,i)=>L.polyline(c.lat.map((v,k)=>[v,c.lon[k]]),{color:COL[i],we
 D.forEach((c,i)=>{$("legend").insertAdjacentHTML("beforeend",
  `<label style="color:${COL[i]}"><input type="checkbox" data-i="${i}" ${on[i]?"checked":""}> ${c.name}</label><br>`);
  $("refsel").add(new Option("median of "+c.name,i))});
-$("refsel").value=6;
+$("refsel").value=D.length-1;
 $("legend").onchange=e=>{on[e.target.dataset.i]=e.target.checked;show()};
 $("tracks").onchange=show;
 $("refsel").onchange=()=>{const c=D[$("refsel").value];setRef({lat:med(c.lat),lon:med(c.lon),h:med(c.h)})};

@@ -1,8 +1,7 @@
-"""Build viewer.html from out_0..6.csv (ECEF -> WGS-84 lat/lon/h). Stdlib only. Usage: python3 build_viewer.py"""
+"""Build viewer.html from the out_<config>.csv files listed in comparison.csv (ECEF -> WGS-84 lat/lon/h). Stdlib only. Usage: python3 build_viewer.py"""
 import csv, json, math
 
-NAMES = ["0 raw, LS", "1 corrected, LS", "2 corrected, WLS elev", "3 corrected, LQLC",
-         "4 corrected, LQLC + elev", "5 all GNSS, LS", "6 all GNSS, LQLC"]
+NAMES = [r["config"] for r in csv.DictReader(open("comparison.csv"))]
 A, E2 = 6378137.0, 6.69437999014e-3
 
 def geodetic(x, y, z):
@@ -13,8 +12,8 @@ def geodetic(x, y, z):
     return math.degrees(lat), math.degrees(lon), h
 
 cfgs, ep = [], None
-for i, name in enumerate(NAMES):
-    rows = list(csv.DictReader(open(f"out_{i}.csv")))
+for name in NAMES:
+    rows = list(csv.DictReader(open(f"out_{name}.csv")))
     e = [r["epoch"] for r in rows]
     assert ep is None or e == ep, "epochs differ"
     ep = e

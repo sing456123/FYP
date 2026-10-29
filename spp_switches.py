@@ -1,23 +1,23 @@
 """
-SPP with correction switches: LS / WLS / LQLC
-=============================================
-Flow per epoch (as discussed):
-  1) once per epoch : rho0 = raw (+ fixed satellite terms: clock, relativity, TGD)
-  2) every iteration: from current theta_n -> el, az -> tropo, iono, Sagnac, mask, weights
-                      rho_c = rho0 - iono - tropo        (always fresh from rho0)
-                      y = rho_c - pred(theta_n);  dtheta = (H^T W H)^-1 H^T W y
-  3) next epoch starts from this epoch's fix
+SPP with correction switches: LS / LQLC, step 0..3
+==================================================
+Input pseudorange: cor_pseudo (receiver-corrected; which corrections it already holds is
+still to be confirmed with the supervisor). Each step adds ONE correction on top:
 
-Switches are in CONFIGS below. Each config is one run; a comparison table is printed.
+  step 0 : cor_pseudo                      (baseline)
+  step 1 : + sagnac                        Earth rotation during signal travel
+  step 2 : + tropo                         Saastamoinen, standard atmosphere
+  step 3 : + iono                          Klobuchar with RTKLIB default coefficients (no BRDC)
 
-What can be computed from sppStruct_user.csv alone:
-  friend_cor=False -> raw_pseudo, NO corrections at all (baseline)
-  friend_cor=True  -> cor_pseudo, the friend's tool corrections (sat clock+iono+tropo, all-in-one)
-  tropo, sagnac, mask, weights, estimator -> computed here
-Needs the broadcast navigation file (BRDC, 2022 day 173) -> not available yet:
-  sat_clock, relativity, tgd, iono   (stubs raise a clear error until NAV is loaded)
+Each step runs with LS and with LQLC. If a step makes results worse (e.g. height jumps),
+the receiver had probably already applied that correction.
 
-Usage:  python spp_switches.py sppStruct_user.csv
+Flow per epoch:
+  every iteration: from current theta_n -> el, az -> sagnac, tropo, iono, mask
+                   y = rho - pred(theta_n);  dtheta = (H^T W H)^-1 H^T W y
+  next epoch starts from this epoch's fix
+
+Usage:  python spp_switches.py data.csv
 """
 import sys
 import numpy as np
@@ -26,34 +26,30 @@ import pandas as pd
 C = 299792458.0
 OMEGA_E = 7.2921151467e-5
 SYS_NAME = {1: "GPS", 4: "GLO", 8: "GAL", 32: "BDS"}
+FREQ = {1: 1575.42e6, 4: 1602.0e6, 8: 1575.42e6, 32: 1561.098e6}   # L1 / G1 (nominal) / E1 / B1I
+ION_DEFAULT = [0.1118e-07, -0.7451e-08, -0.5961e-07, 0.1192e-06,  # alpha  (RTKLIB ion_default)
+               0.1167e+06, -0.2294e+06, -0.1311e+06, 0.1049e+07]  # beta
 
 # ============================== SWITCHES ==============================
 BASE = dict(
-    friend_cor=True,     # friend's lumped sat clock+iono+tropo (uses cor_pseudo); False = raw_pseudo
-    sat_clock=False,     # needs NAV  (turn friend_cor off first)
-    relativity=False,    # needs NAV
-    tgd=False,           # needs NAV
-    iono=False,          # needs NAV  (Klobuchar alpha/beta)
-    tropo=False,         # Saastamoinen, recomputed every iteration
-    sagnac=False,        # Earth-rotation range term, recomputed every iteration
+    sagnac=False,        # Earth-rotation range term
+    tropo=False,         # Saastamoinen
+    iono=False,          # Klobuchar, default coefficients
     systems=[1],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
-    mask_deg=10.0,       # elevation mask, recomputed every iteration
-    weight="none",       # 'none' | 'elev' (sin^2 el) | 'snr' (10^(snr/10))
+    mask_deg=10.0,       # elevation mask (deg)
     estimator="LS",      # 'LS' | 'LQLC'
     s=3.0,               # LQLC scale (m)
 )
-CONFIGS = {   # name: changes from BASE
-    "0 no corrections, LS":       dict(friend_cor=False),
-    "1 corrected, LS":            dict(),
-    "2 corrected, WLS elev":      dict(weight="elev"),
-    "3 corrected, LQLC":          dict(estimator="LQLC"),
-    "4 corrected, LQLC + elev":   dict(estimator="LQLC", weight="elev"),
-    "5 all GNSS, LS":             dict(systems=[1, 4, 8, 32]),
-    "6 all GNSS, LQLC":           dict(systems=[1, 4, 8, 32], estimator="LQLC"),
-}
+STEPS = [                # each step adds one correction to the previous
+    dict(),
+    dict(sagnac=True),
+    dict(sagnac=True, tropo=True),
+    dict(sagnac=True, tropo=True, iono=True),
+]
+CONFIGS = {f"s{i}_{est}": dict(**step, estimator=est)       # s0_LS, s0_LQLC, s1_LS, ...
+           for i, step in enumerate(STEPS) for est in ("LS", "LQLC")}
 REF_XYZ = None    # put surveyed antenna ECEF (m) here, e.g. np.array([x, y, z]); None = no truth
 MAX_ITER, TOL = 30, 1e-3
-NAV = None        # will hold broadcast ephemeris once a BRDC file is provided
 # ======================================================================
 
 
@@ -86,6 +82,8 @@ def el_az(sat_xyz, rx):
 def tropo_saastamoinen(el, rx):
     """Saastamoinen with standard atmosphere (RTKLIB form). el in rad. Returns metres."""
     lat, _, h = ecef_to_lla(rx)
+    if not -100.0 < h < 1e4:              # still converging from Earth's centre: model invalid
+        return np.zeros(len(el))
     h = max(h, 0.0)
     pres = 1013.25 * (1 - 2.2557e-5 * h) ** 5.2568
     temp = 15.0 - 6.5e-3 * h + 273.16
@@ -96,48 +94,40 @@ def tropo_saastamoinen(el, rx):
     return (zhd + zwd) / sinel
 
 
+def iono_klobuchar(el, az, rx, tow, ion=ION_DEFAULT):
+    """Klobuchar L1 delay (m), RTKLIB ionmodel. el, az in rad, tow = GPS seconds of week."""
+    lat, lon, _ = ecef_to_lla(rx)
+    E = el / np.pi                                           # semicircles from here on
+    psi = 0.0137 / (E + 0.11) - 0.022                        # earth-centred angle
+    phi = np.clip(lat / np.pi + psi * np.cos(az), -0.416, 0.416)   # pierce-point latitude
+    lam = lon / np.pi + psi * np.sin(az) / np.cos(phi * np.pi)     # pierce-point longitude
+    phi = phi + 0.064 * np.cos((lam - 1.617) * np.pi)        # geomagnetic latitude
+    t = (43200.0 * lam + tow) % 86400.0                      # local time (s)
+    F = 1.0 + 16.0 * (0.53 - E) ** 3                         # slant factor
+    amp = np.maximum(np.polyval(ion[3::-1], phi), 0.0)
+    per = np.maximum(np.polyval(ion[:3:-1], phi), 72000.0)
+    x = 2 * np.pi * (t - 50400.0) / per
+    return C * F * np.where(np.abs(x) < 1.57, 5e-9 + amp * (1 - x ** 2 / 2 + x ** 4 / 24), 5e-9)
+
+
 def sagnac(sat_xyz, rx):
     """Earth rotation during signal travel, as a range term (m)."""
     return OMEGA_E / C * (sat_xyz[:, 0] * rx[1] - sat_xyz[:, 1] * rx[0])
 
 
-def need_nav(name):
-    raise RuntimeError(f"'{name}' needs the broadcast navigation file (BRDC 2022 day 173). "
-                       "Upload it and this switch will be implemented and tested.")
-
-
-def fixed_sat_terms(g, cfg):
-    """Once per epoch: rho0 = pseudorange + fixed satellite terms."""
-    rho0 = (g.cor_pseudo if cfg["friend_cor"] else g.raw_pseudo).values.astype(float)
-    if cfg["friend_cor"] and any(cfg[k] for k in ("sat_clock", "iono", "tropo", "tgd", "relativity")):
-        raise ValueError("friend_cor already contains sat clock/iono/tropo -> would double count")
-    if cfg["sat_clock"]:  need_nav("sat_clock")    # rho0 += c*dts
-    if cfg["relativity"]: need_nav("relativity")   # rho0 += c*dtr
-    if cfg["tgd"]:        need_nav("tgd")          # rho0 -= c*TGD
-    return rho0
-
-
-def iter_terms(sat_xyz, theta, cfg, have_pos):
+def iter_terms(sat_xyz, sysid, tow, theta, cfg, have_pos):
     """Every iteration: position-dependent terms from the CURRENT theta."""
     n = len(sat_xyz)
     if not have_pos:                      # theta still at Earth's centre: nothing computable
-        return np.zeros(n), np.ones(n, bool), np.full(n, np.nan)
+        return np.zeros(n), np.ones(n, bool)
     rx = theta[:3]
     el, az = el_az(sat_xyz, rx)
     corr = np.zeros(n)
+    if cfg["sagnac"]: corr += sagnac(sat_xyz, rx)
     if cfg["tropo"]:  corr += tropo_saastamoinen(el, rx)
-    if cfg["iono"]:   need_nav("iono")     # corr += klobuchar(el, az, rx, alpha, beta)
-    if cfg["sagnac"]: corr += sagnac(sat_xyz, rx)   # added to the prediction side
+    if cfg["iono"]:   corr += iono_klobuchar(el, az, rx, tow) * (FREQ[1] / np.vectorize(FREQ.get)(sysid)) ** 2
     keep = el >= np.radians(cfg["mask_deg"])
-    return corr, keep, el
-
-
-def prior_weight(el, snr, cfg):
-    if cfg["weight"] == "elev":
-        return np.where(np.isnan(el), 1.0, np.sin(np.nan_to_num(el, nan=np.pi / 2)) ** 2)
-    if cfg["weight"] == "snr":
-        return 10 ** (snr / 10) / 10 ** (45 / 10)
-    return np.ones(len(snr))
+    return corr, keep
 
 
 def lqlc_weight(y, s):
@@ -149,28 +139,28 @@ def lqlc_weight(y, s):
 def solve_epoch(g, theta0, cfg):
     sat_xyz = g[["sat_x", "sat_y", "sat_z"]].values
     sysid = g.sat_const.values
-    snr = g.sat_snr.values.astype(float)
+    tow = float(g.tow.iloc[0])
+    rho = g.cor_pseudo.values.astype(float)
     systems = [s for s in cfg["systems"] if (sysid == s).any()]
     col = {s: 3 + k for k, s in enumerate(systems)}
 
-    rho0 = fixed_sat_terms(g, cfg)                                # (1) once per epoch
     theta = np.r_[theta0[:3], np.zeros(len(systems))]
     if len(theta0) == len(theta): theta = theta0.copy()
     robust_on = False
     for it in range(2 * MAX_ITER):
         have_pos = np.linalg.norm(theta[:3]) > 6.0e6
-        corr, keep, el = iter_terms(sat_xyz, theta, cfg, have_pos)  # (2) every iteration
+        corr, keep = iter_terms(sat_xyz, sysid, tow, theta, cfg, have_pos)
         vec = sat_xyz - theta[:3]
         rng = np.linalg.norm(vec, axis=1)
         clk = np.array([theta[col[s]] for s in sysid])
-        y = rho0 - (rng + clk + corr)                               # tropo/sagnac move with theta
+        y = rho - (rng + clk + corr)                                # corrections move with theta
         H = np.zeros((len(y), len(theta)))
         H[:, :3] = -vec / rng[:, None]
         for i, s in enumerate(sysid): H[i, col[s]] = 1.0
 
-        w = prior_weight(el, snr, cfg) * keep
+        w = keep.astype(float)
         if robust_on:
-            w = w * lqlc_weight(y, cfg["s"])                        # prior trust x data trust
+            w = w * lqlc_weight(y, cfg["s"])
         if (keep.sum() <= len(theta)) or any(w[sysid == s].sum() == 0 for s in systems):
             return None
         HW = H * w[:, None]
@@ -215,8 +205,7 @@ def score(df, ref):
         row.update(hRMS=np.sqrt((hz ** 2).mean()), h95=np.percentile(hz, 95), vRMS=np.sqrt((e[:, 2] ** 2).mean()),
                    biasE=e[:, 0].mean(), biasN=e[:, 1].mean(), biasU=e[:, 2].mean())
     else:
-        lat0, lon0, _ = ecef_to_lla(mean)
-        row.update(lat=np.degrees(lat0), lon=np.degrees(lon0))
+        row.update(lat=np.degrees(lat), lon=np.degrees(lon))
     return row
 
 
@@ -225,12 +214,9 @@ if __name__ == "__main__":
     rows = []
     for name, change in CONFIGS.items():
         cfg = {**BASE, **change}
-        try:
-            df = run(cfg, data)
-            rows.append(dict(config=name, **score(df, REF_XYZ)))
-            df.to_csv(f"out_{name.split()[0]}.csv", index=False)
-        except Exception as ex:
-            rows.append(dict(config=name, error=str(ex)[:80]))
+        df = run(cfg, data)
+        rows.append(dict(config=name, **score(df, REF_XYZ)))
+        df.to_csv(f"out_{name}.csv", index=False)
         print("done:", name)
     T = pd.DataFrame(rows)
     pd.set_option("display.width", 200)
