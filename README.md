@@ -20,6 +20,7 @@ you change the satellites, elevation mask or LQLC scale in `BASE`.
 | `sweep.py` | Imports `spp_switches` and runs every elevation mask × LQLC `s` combination in parallel | `run<N>/` + `sweep.txt` |
 | `feasibility.py` | Imports `spp_switches`, records every satellite's SNR next to its residual, and tests whether SNR predicts bad ranges (MOMENT step 1) | `feas<N>/` |
 | `spp_snrgate.py` | Copy of `spp_switches` with a causal SNR gate (veto / down-weight suspects): does the gate beat LQLC alone? (MOMENT step 2) | `run<N>/` |
+| `spp_sigma.py` | Copy of `spp_switches` with RTKLIB's elevation/system noise model σᵢ, as a prior weight 1/σᵢ² and/or a per-satellite `s` | `run<N>/` |
 | `build_viewer.py` | Map viewer for a run (called automatically) | `run<N>/viewer.html` |
 | `build_sweep.py` | Summary page for a sweep: dropdowns, charts, heatmap (called automatically) | `run<N>/sweep.html` |
 | `templates/` | The two HTML templates the builders fill in | |
@@ -32,6 +33,53 @@ you change the satellites, elevation mask or LQLC scale in `BASE`.
 | `run4` | Sweep: masks 5–20° × s 1–10 m (open `sweep.html`) |
 | `feas1` | Feasibility: SNR vs residual (`feasibility.txt`) |
 | `run7` | SNR-gate decision test |
+| `run9` | RTKLIB noise model / per-satellite `s` test |
+
+---
+
+## Findings: what we tried to enhance LQLC
+
+All tests: `cor_pseudo` (already corrected for clock, iono, tropo, Sagnac), 6693 epochs, Hong Kong urban
+canyon. Numbers are **spread around each config's own mean** (precision): horizontal RMS / vertical std, in metres.
+
+```mermaid
+flowchart LR
+    LS["LS<br/>4.60 / 8.81"] -->|"robust weights"| LQ["<b>LQLC, one s</b><br/>2.51 / 4.00"]
+    LQ -->|"+ SNR jump gate"| G["2.48–2.49 / 3.94–3.98<br/>≈ same"]
+    LQ -->|"+ low-SNR veto"| V["2.80 / 3.97<br/>worse"]
+    LQ -->|"+ per-satellite s"| S["2.79 / 4.74<br/>worse"]
+    LQ -->|"+ per-sat s + 1/σ² weight"| W["2.56 / 3.80<br/>≈ draw"]
+```
+
+| # | Idea | How | Result | Verdict |
+|---|---|---|---|---|
+| 1 | **LQLC instead of LS** | Robust `tanh(x)/x` weights after an LS start | H 4.60 → **2.51** (−45%), V 8.81 → **4.00** (−55%) | ✅ **Main gain** |
+| 2 | More satellites | GPS only → GPS + GLONASS + Galileo + BeiDou | LQLC H 4.08 → 2.72 at 10° (run1 → run3); LS barely changes | ✅ LQLC needs the redundancy |
+| 3 | Tune mask and `s` | Sweep masks 5–20° × `s` 1–10 m (run4) | Best mask 5°, `s` 3–5 m; `s` moves H by only ~0.5 m. A high mask helps LS but hurts LQLC | ✅ Constant `s` is fine |
+| 4 | SNR as a warning sign | Feasibility (feas1): SNR vs residual | Below 30°, an SNR jump > 2 dB marks 22–45% bad ranges (vs 4% average) | ✅ The signal is real |
+| 5 | SNR jump gate | Veto / down-weight such satellites before solving (run7) | LS: 95% error −43%. **LQLC: only −1 to −3%** | ⚠️ LQLC already does its job |
+| 6 | Low-SNR veto | Drop satellites with SNR ≤ 30 dB-Hz below 30° (run7) | LQLC H **+12% worse** | ❌ Removes useful satellites |
+| 7 | RTKLIB noise model | σᵢ from elevation + system as weight 1/σᵢ² (run9) | LS: H −38%. LQLC + weight + per-sat `s`: H +2%, V −5% | ⚠️ Helps LS, a draw for LQLC |
+| 8 | Per-satellite `s` | `s_i = s·σᵢ/σ_ref` (run9) | LQLC H **+11%**, V **+19% worse** | ❌ Lets bounced signals back in |
+| 9 | MOMENT pre-filter | Not built: ideas 4–5 show its room on top of LQLC is ~1–3% | – | ⏸️ Not worth it for now |
+
+**Conclusion.** LQLC with a single constant `s` already captures what the extra ideas try to add. SNR
+filtering and elevation noise models are genuinely useful for **LS**, but LQLC alone does better than LS with
+either of them, and adding them to LQLC changes little or makes it worse.
+
+**Why the elevation model fails here:** it assumes low satellites are noisier in a random, harmless way, which
+is true in open sky. In the urban canyon much of their extra error is bounced (multipath / NLOS) signals,
+i.e. outliers. LQLC with one `s` down-weights them; a larger per-satellite `s` relabels them as normal.
+
+**Caveats**
+- **Precision, not accuracy:** no surveyed antenna position yet (`REF_XYZ`). `mean_h` differs by a few
+  metres between configs, so a tight config could still be biased.
+- **One dataset:** one receiver, one site, one session. In open sky the noise model may help more.
+- **`s` not re-tuned for per-satellite `s`:** only `s` = 3 and 5 tried there.
+- "Doesn't help" means **"doesn't help on top of LQLC"**: ideas 5 and 7 are real improvements for LS.
+
+**Next steps:** a surveyed reference position (accuracy instead of precision), a second dataset (open sky
+or UrbanNav), and an oracle veto test (the best any pre-filter could do) to close the MOMENT question.
 
 ---
 
