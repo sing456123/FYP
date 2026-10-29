@@ -1,5 +1,5 @@
 """Build run<N>/viewer.html from the out_<config>.csv files listed in run<N>/comparison.csv (ECEF -> WGS-84 lat/lon/h). Stdlib only. Usage: python3 build_viewer.py [run<N>]  (default: newest run)"""
-import csv, glob, json, math, sys
+import csv, glob, json, math, os, sys
 
 RUNS = sorted((p for p in glob.glob("run*") if p[3:].isdigit()), key=lambda p: int(p[3:]))
 RUN = sys.argv[1] if len(sys.argv) > 1 else RUNS[-1]
@@ -25,6 +25,6 @@ for name in NAMES:
                      h=[round(p[2], 3) for p in g], nsat=[int(r["nsat"]) for r in rows],
                      conv=[int(r["conv"] == "True") for r in rows]))
 
-html = open("viewer_template.html").read().replace("__DATA__", json.dumps(cfgs))
+html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer_template.html")).read().replace("__DATA__", json.dumps(cfgs))
 open(f"{RUN}/viewer.html", "w").write(html)
 print(f"{RUN}/viewer.html", len(html) // 1024, "KB")

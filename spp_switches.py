@@ -23,6 +23,7 @@ Usage:  python spp_switches.py data.csv      -> results go to the next free run<
 """
 import sys
 import json
+import subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -39,8 +40,8 @@ BASE = dict(
     sagnac=False,        # Earth-rotation range term; keep False: data already includes it
     tropo=False,         # Saastamoinen
     iono=False,          # Klobuchar, default coefficients
-    systems=[1],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
-    mask_deg=10.0,       # elevation mask (deg)
+    systems=[1,4,8,32],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
+    mask_deg=15.0,       # elevation mask (deg)
     estimator="LS",      # 'LS' | 'LQLC'
     s=3.0,               # LQLC scale (m)
 )
@@ -229,3 +230,4 @@ if __name__ == "__main__":
     print(T.round(2).to_string(index=False))
     T.to_csv(out / "comparison.csv", index=False)
     print("saved to", out)
+    subprocess.run([sys.executable, str(Path(__file__).with_name("build_viewer.py")), str(out)], check=True)
