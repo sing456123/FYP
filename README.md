@@ -12,6 +12,27 @@ you change the satellites, elevation mask or LQLC scale in `BASE`.
 
 **Input:** a CSV with `epoch, tow, sat_const, sat_x, sat_y, sat_z, cor_pseudo`
 
+## Files
+
+| File | What it does | Output |
+|---|---|---|
+| `spp_switches.py` | **Main solver.** LS vs LQLC per epoch on `cor_pseudo`; settings in `BASE` | `run<N>/` |
+| `sweep.py` | Imports `spp_switches` and runs every elevation mask × LQLC `s` combination in parallel | `run<N>/` + `sweep.txt` |
+| `feasibility.py` | Imports `spp_switches`, records every satellite's SNR next to its residual, and tests whether SNR predicts bad ranges (MOMENT step 1) | `feas<N>/` |
+| `spp_snrgate.py` | Copy of `spp_switches` with a causal SNR gate (veto / down-weight suspects): does the gate beat LQLC alone? (MOMENT step 2) | `run<N>/` |
+| `build_viewer.py` | Map viewer for a run (called automatically) | `run<N>/viewer.html` |
+| `build_sweep.py` | Summary page for a sweep: dropdowns, charts, heatmap (called automatically) | `run<N>/sweep.html` |
+| `templates/` | The two HTML templates the builders fill in | |
+| `MOMENT-GNSS-proposal.md` | Proposal for a MOMENT pre-filter, assessed with `feasibility.py` and `spp_snrgate.py` | |
+
+| Folder | Contents |
+|---|---|
+| `run1`, `run2` | Old correction-step runs (GPS 10° / all GNSS 15°); only their `s0_*` configs are valid |
+| `run3` | LS vs LQLC, all GNSS, 10°, s = 3 |
+| `run4` | Sweep: masks 5–20° × s 1–10 m (open `sweep.html`) |
+| `feas1` | Feasibility: SNR vs residual (`feasibility.txt`) |
+| `run7` | SNR-gate decision test |
+
 ---
 
 ## 1. What a run compares
@@ -343,7 +364,7 @@ run2/
 ```
 
 `build_viewer.py` takes the newest `run<N>/` (or the one you name), reads the config names from its
-`comparison.csv`, converts every `out_<config>.csv` to lat/lon/h and fills `viewer_template.html`. The resulting
+`comparison.csv`, converts every `out_<config>.csv` to lat/lon/h and fills `templates/viewer_template.html`. The resulting
 `viewer.html` shows every config on a map with tracks, per-epoch values (including the residual RMS), statistics
 against a chosen reference, and, for reference, each config's spread around its own mean and its average
 residuals.

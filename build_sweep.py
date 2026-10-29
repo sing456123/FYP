@@ -13,6 +13,6 @@ rows = [dict(config=r["config"], estimator=r["estimator"], mask_deg=float(r["mas
 cfg = next(iter(json.load(open(f"{RUN}/config.json")).values()))
 data = dict(run=RUN, systems=cfg["systems"], epochs=int(comp[0]["epochs"]), rows=rows)
 
-html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "sweep_template.html")).read()
+html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "sweep_template.html")).read()
 open(f"{RUN}/sweep.html", "w").write(html.replace("__DATA__", json.dumps(data)))
 print(f"{RUN}/sweep.html")

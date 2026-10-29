@@ -29,6 +29,6 @@ for name, comp in zip(NAMES, COMP):
                      spread={k: round(float(comp[k]), 2)
                              for k in ("h_spread", "h95_spread", "v_spread", "res_rms", "res_max")}))
 
-html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer_template.html")).read().replace("__DATA__", json.dumps(cfgs))
+html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "viewer_template.html")).read().replace("__DATA__", json.dumps(cfgs))
 open(f"{RUN}/viewer.html", "w").write(html)
 print(f"{RUN}/viewer.html", len(html) // 1024, "KB")
