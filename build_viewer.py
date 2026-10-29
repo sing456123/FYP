@@ -1,0 +1,28 @@
+"""Build viewer.html from out_0..6.csv (ECEF -> WGS-84 lat/lon/h). Stdlib only. Usage: python3 build_viewer.py"""
+import csv, json, math
+
+NAMES = ["0 raw, LS", "1 corrected, LS", "2 corrected, WLS elev", "3 corrected, LQLC",
+         "4 corrected, LQLC + elev", "5 all GNSS, LS", "6 all GNSS, LQLC"]
+A, E2 = 6378137.0, 6.69437999014e-3
+
+def geodetic(x, y, z):
+    lon = math.atan2(y, x); r = math.hypot(x, y); lat = math.atan2(z, r * (1 - E2))
+    for _ in range(6):
+        N = A / math.sqrt(1 - E2 * math.sin(lat) ** 2); h = r / math.cos(lat) - N
+        lat = math.atan2(z, r * (1 - E2 * N / (N + h)))
+    return math.degrees(lat), math.degrees(lon), h
+
+cfgs, ep = [], None
+for i, name in enumerate(NAMES):
+    rows = list(csv.DictReader(open(f"out_{i}.csv")))
+    e = [r["epoch"] for r in rows]
+    assert ep is None or e == ep, "epochs differ"
+    ep = e
+    g = [geodetic(float(r["x"]), float(r["y"]), float(r["z"])) for r in rows]
+    cfgs.append(dict(name=name, lat=[round(p[0], 8) for p in g], lon=[round(p[1], 8) for p in g],
+                     h=[round(p[2], 3) for p in g], nsat=[int(r["nsat"]) for r in rows],
+                     conv=[int(r["conv"] == "True") for r in rows]))
+
+html = open("viewer_template.html").read().replace("__DATA__", json.dumps(cfgs))
+open("viewer.html", "w").write(html)
+print("viewer.html", len(html) // 1024, "KB")
