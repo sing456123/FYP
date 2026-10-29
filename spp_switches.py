@@ -1,18 +1,13 @@
 """
-SPP with correction switches: LS / LQLC, step 0..3
-==================================================
-Input pseudorange: cor_pseudo (receiver-corrected; which corrections it already holds is
-still to be confirmed with the supervisor). Each step adds ONE correction on top:
+SPP: LS vs LQLC on cor_pseudo
+=============================
+Input pseudorange: cor_pseudo. Confirmed by the supervisor: the receiver already corrected it
+for iono, tropo and Sagnac (and the satellite clock). So every run is just LS vs LQLC; vary
+systems / mask_deg / s in BASE between runs.
 
-  step 0 : cor_pseudo                      (baseline)
-  step 1 : + tropo                         Saastamoinen, standard atmosphere
-  step 2 : + iono                          Klobuchar with RTKLIB default coefficients (no BRDC)
-
-Sagnac is NOT a step: turning it on moved the fix ~32 m E-W off the antenna site,
-so the data already includes Earth rotation (most likely in sat_x/y/z, maybe in cor_pseudo).
-
-Each step runs with LS and with LQLC. If a step makes results worse (e.g. height jumps),
-the receiver had probably already applied that correction.
+The sagnac / tropo / iono switches stay OFF: on cor_pseudo they would apply the correction
+twice (seen in testing: Sagnac moved the fix ~32 m E-W, tropo + iono dropped height ~19 m).
+They are kept only for a future raw_pseudo path.
 
 Flow per epoch:
   every iteration: from current theta_n -> el, az -> sagnac, tropo, iono, mask
@@ -37,21 +32,18 @@ ION_DEFAULT = [0.1118e-07, -0.7451e-08, -0.5961e-07, 0.1192e-06,  # alpha  (RTKL
 
 # ============================== SWITCHES ==============================
 BASE = dict(
-    sagnac=False,        # Earth-rotation range term; keep False: data already includes it
-    tropo=False,         # Saastamoinen
-    iono=False,          # Klobuchar, default coefficients
+    sagnac=False,        # keep False: already in cor_pseudo (only for raw_pseudo)
+    tropo=False,         # keep False: already in cor_pseudo (Saastamoinen, only for raw_pseudo)
+    iono=False,          # keep False: already in cor_pseudo (Klobuchar, only for raw_pseudo)
     systems=[1,4,8,32],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
     mask_deg=15.0,       # elevation mask (deg)
     estimator="LS",      # 'LS' | 'LQLC'
     s=3.0,               # LQLC scale (m)
 )
-STEPS = [                # each step adds one correction to the previous
-    dict(),
-    dict(tropo=True),
-    dict(tropo=True, iono=True),
-]
-CONFIGS = {f"s{i}_{est}": dict(**step, estimator=est)       # s0_LS, s0_LQLC, s1_LS, ...
-           for i, step in enumerate(STEPS) for est in ("LS", "LQLC")}
+CONFIGS = {             # name: changes from BASE
+    "LS":   dict(estimator="LS"),
+    "LQLC": dict(estimator="LQLC"),
+}
 REF_XYZ = None    # put surveyed antenna ECEF (m) here, e.g. np.array([x, y, z]); None = no truth
 MAX_ITER, TOL = 30, 1e-3
 # ======================================================================

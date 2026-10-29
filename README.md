@@ -1,11 +1,11 @@
-# SPP Correction Steps: LS vs LQLC
+# SPP: LS vs LQLC
 
 `spp_switches.py` computes the receiver position every epoch from GNSS pseudoranges (Single Point Positioning).
-It starts from the receiver's `cor_pseudo` and adds **one correction per step**. Each step is solved with both
-**LS** and **LQLC**, which gives 6 configs and one comparison table.
+It solves every epoch with both **LS** and **LQLC** on the receiver's `cor_pseudo` and compares them. Between runs
+you change the satellites, elevation mask or LQLC scale in `BASE`.
 
 ```bash
-.venv/bin/python spp_switches.py data.csv     # 6 configs → next free run<N>/ folder, viewer included
+.venv/bin/python spp_switches.py data.csv     # LS + LQLC → next free run<N>/ folder, viewer included
 .venv/bin/python build_viewer.py run1         # rebuild the viewer for one run (newest if omitted)
 ```
 
@@ -13,33 +13,29 @@ It starts from the receiver's `cor_pseudo` and adds **one correction per step**.
 
 ---
 
-## 1. The steps
+## 1. What a run compares
 
 ```mermaid
 flowchart LR
-    S0["<b>step 0</b><br/>cor_pseudo<br/>(baseline)"] -->|"+ tropo<br/>Saastamoinen"| S1["<b>step 1</b>"]
-    S1 -->|"+ iono<br/>Klobuchar"| S2["<b>step 2</b>"]
+    B["BASE<br/>systems · mask_deg · s"] --> LS["LS"]
+    B --> LQ["LQLC"]
+    LS --> R[/"run&lt;N&gt;/"/]
+    LQ --> R
 ```
 
 ```mermaid
-flowchart TB
-    subgraph each [every step runs twice]
-        LS["LS"]
-        LQ["LQLC"]
-    end
-    STEPS["STEPS 0..2"] --> each --> CFG["s0_LS, s0_LQLC, … s2_LQLC"]
+flowchart LR
+    R1["run1<br/>GPS, 10°"] -.change one setting.-> R2["run2<br/>all GNSS, 15°"] -.-> R3["run3 …"]
 ```
 
-None of these corrections needs the broadcast navigation file (BRDC). Iono uses Klobuchar with RTKLIB's default
-coefficients.
+Change **one** setting per run, so any difference between runs can be traced to it. Each run's `config.json`
+records what was used.
 
-> **Sagnac is not a step.** With it switched on, the fix moved about 32 m east–west, away from the antenna site,
-> while step 0 lands on it. So the data already includes Earth rotation (most likely in `sat_x/y/z`, possibly in `cor_pseudo`), and `sagnac`
-> stays `False`.
-
-> **Open question:** which corrections the receiver already put into `cor_pseudo` is still to be confirmed.
-> If a step makes results *worse* (for example, the height jumps), the receiver had probably already applied
-> that correction, and the step counts it twice.
+> **`cor_pseudo` is already corrected.** The supervisor confirmed that the receiver applied ionosphere,
+> troposphere and Sagnac (and the satellite clock) to `cor_pseudo`. So the `sagnac`, `tropo` and `iono`
+> switches stay **off**: switching them on applies a correction twice. Testing showed exactly that: Sagnac moved
+> the fix about 32 m east–west off the antenna site, and tropo + iono lowered the height by about 19 m.
+> The correction functions are kept for a possible future `raw_pseudo` path.
 
 ---
 
@@ -49,7 +45,7 @@ coefficients.
 flowchart LR
     A[(data.csv)] --> B[main]
     B --> C{for each config<br/>in CONFIGS}
-    C --> D["cfg = BASE + step + estimator"]
+    C --> D["cfg = BASE + estimator"]
     D --> E["run(cfg, data)"]
     E --> F["score(df)"]
     F --> G[/"run&lt;N&gt;/out_config.csv"/]
@@ -144,17 +140,17 @@ flowchart TB
 
 ## 6. Settings
 
-`BASE` holds the defaults. Each config is `BASE` + one entry of `STEPS` + an estimator.
+`BASE` holds the settings of a run. Each config is `BASE` + an estimator.
 
 | Setting | Values | Meaning |
 |---|---|---|
-| `sagnac` | bool | Earth-rotation term. Keep `False`: the data already includes it |
-| `tropo` | bool | Saastamoinen troposphere (set by `STEPS`) |
-| `iono` | bool | Klobuchar ionosphere (set by `STEPS`) |
-| `estimator` | `LS` / `LQLC` | Plain least squares, or LS followed by robust LQLC (both are run) |
+| `systems` | list | `1` GPS, `4` GLONASS, `8` Galileo, `32` BeiDou. One clock unknown per system |
 | `mask_deg` | degrees | Satellites below this elevation get weight 0 |
 | `s` | metres | LQLC scale. Larger values behave more like LS |
-| `systems` | list | `1` GPS, `4` GLONASS, `8` Galileo, `32` BeiDou. One clock unknown per system |
+| `estimator` | `LS` / `LQLC` | Set by `CONFIGS`: every run solves both |
+| `sagnac` | bool | **Keep `False`**: already in `cor_pseudo` (only for raw pseudoranges) |
+| `tropo` | bool | **Keep `False`**: already in `cor_pseudo` (only for raw pseudoranges) |
+| `iono` | bool | **Keep `False`**: already in `cor_pseudo` (only for raw pseudoranges) |
 
 Other settings: `REF_XYZ` (surveyed antenna ECEF, enables true-error scoring), `MAX_ITER`, `TOL`.
 
@@ -233,7 +229,7 @@ $$
 $w \to 1$ for small residuals and $w \approx 2s/\lvert r\rvert$ for large ones. The constant $1/(4s^2)$ cancels in
 the normal equations.
 
-### 7.5 Sagnac (switch only, not a step)
+### 7.5 Sagnac (switch, off: already in `cor_pseudo`)
 
 While the signal travels for about 70 ms, the Earth rotates under it:
 
@@ -242,7 +238,7 @@ S_i = \frac{\omega_e}{c}\left(x^{s}_i\,y_r - y^{s}_i\,x_r\right),
 \qquad \omega_e = 7.2921151467\times10^{-5}\ \text{rad/s}
 $$
 
-### 7.6 Troposphere: Saastamoinen (step 1)
+### 7.6 Troposphere: Saastamoinen (switch, off: already in `cor_pseudo`)
 
 $$
 \begin{aligned}
@@ -255,7 +251,7 @@ T_i &= \frac{\text{ZHD} + \text{ZWD}}{\sin(\max(el_i,\ 1^\circ))}
 \end{aligned}
 $$
 
-### 7.7 Ionosphere: Klobuchar (step 2)
+### 7.7 Ionosphere: Klobuchar (switch, off: already in `cor_pseudo`)
 
 ```mermaid
 flowchart LR
@@ -320,7 +316,7 @@ flowchart TD
 ```
 
 Without `REF_XYZ` the table only measures **precision**: how tightly the fixes cluster. A correction mostly shifts
-the mean position, which spread can't show. Watch `mean_h`, `lat` and `lon` between steps, and set `REF_XYZ` to a
+the mean position, which spread can't show. Watch `mean_h`, `lat` and `lon` between runs, and set `REF_XYZ` to a
 surveyed antenna position to measure true accuracy.
 
 ---
@@ -333,7 +329,8 @@ Every run of `spp_switches.py` gets its own folder, so earlier results are never
 run1/
 ├── config.json        settings of every config in this run
 ├── comparison.csv     one summary row per config
-├── out_s0_LS.csv …    one fix per epoch per config
+├── out_LS.csv        one fix per epoch, LS
+├── out_LQLC.csv      one fix per epoch, LQLC
 └── viewer.html        built automatically at the end of the run
 run2/
 └── …
@@ -346,15 +343,25 @@ reference.
 
 ---
 
-## 10. Adding a step
+## 10. Starting a new run
 
-Append one dict to `STEPS`. It runs with both LS and LQLC automatically:
+Change one setting in `BASE`, then run again. The results go into the next `run<N>/`:
 
 ```python
-STEPS = [
-    dict(),
-    dict(tropo=True),
-    dict(tropo=True, iono=True),
-    dict(tropo=True, iono=True, mask_deg=15.0),   # step 3 → s3_LS, s3_LQLC
-]
+BASE = dict(
+    ...
+    systems=[1, 4, 8, 32],   # e.g. run3: all GNSS
+    mask_deg=10.0,           #        back to 10°
+    s=3.0,
+)
+```
+
+To compare more than LS and LQLC in one run, add an entry to `CONFIGS`:
+
+```python
+CONFIGS = {
+    "LS":      dict(estimator="LS"),
+    "LQLC":    dict(estimator="LQLC"),
+    "LQLC_s5": dict(estimator="LQLC", s=5.0),   # → out_LQLC_s5.csv
+}
 ```
