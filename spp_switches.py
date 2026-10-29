@@ -19,9 +19,11 @@ Flow per epoch:
                    y = rho - pred(theta_n);  dtheta = (H^T W H)^-1 H^T W y
   next epoch starts from this epoch's fix
 
-Usage:  python spp_switches.py data.csv
+Usage:  python spp_switches.py data.csv      -> results go to the next free run<N>/ folder
 """
 import sys
+import json
+from pathlib import Path
 import numpy as np
 import pandas as pd
 
@@ -212,14 +214,18 @@ def score(df, ref):
 
 if __name__ == "__main__":
     data = pd.read_csv(sys.argv[1] if len(sys.argv) > 1 else "data.csv")
+    n = 1 + max([int(p.name[3:]) for p in Path(".").glob("run*") if p.name[3:].isdigit()], default=0)
+    out = Path(f"run{n}"); out.mkdir()
+    json.dump({name: {**BASE, **change} for name, change in CONFIGS.items()}, open(out / "config.json", "w"), indent=1)
     rows = []
     for name, change in CONFIGS.items():
         cfg = {**BASE, **change}
         df = run(cfg, data)
         rows.append(dict(config=name, **score(df, REF_XYZ)))
-        df.to_csv(f"out_{name}.csv", index=False)
+        df.to_csv(out / f"out_{name}.csv", index=False)
         print("done:", name)
     T = pd.DataFrame(rows)
     pd.set_option("display.width", 200)
     print(T.round(2).to_string(index=False))
-    T.to_csv("comparison.csv", index=False)
+    T.to_csv(out / "comparison.csv", index=False)
+    print("saved to", out)

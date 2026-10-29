@@ -5,8 +5,9 @@ It starts from the receiver's `cor_pseudo` and adds **one correction per step**.
 **LS** and **LQLC**, which gives 6 configs and one comparison table.
 
 ```bash
-.venv/bin/python spp_switches.py data.csv     # 6 configs → out_<config>.csv + comparison.csv
-.venv/bin/python build_viewer.py              # optional: map viewer → viewer.html
+.venv/bin/python spp_switches.py data.csv     # 6 configs → next free run<N>/ folder
+.venv/bin/python build_viewer.py              # map viewer for the newest run → run<N>/viewer.html
+.venv/bin/python build_viewer.py run1         # ...or for a specific run
 ```
 
 **Input:** a CSV with `epoch, tow, sat_const, sat_x, sat_y, sat_z, cor_pseudo`
@@ -52,10 +53,10 @@ flowchart LR
     C --> D["cfg = BASE + step + estimator"]
     D --> E["run(cfg, data)"]
     E --> F["score(df)"]
-    F --> G[/out_config.csv/]
-    F --> H[/comparison.csv/]
+    F --> G[/"run&lt;N&gt;/out_config.csv"/]
+    F --> H[/"run&lt;N&gt;/comparison.csv"/]
     C -. next config .-> C
-    G --> V["build_viewer.py"] --> VH[/viewer.html/]
+    G --> V["build_viewer.py"] --> VH[/"run&lt;N&gt;/viewer.html"/]
 ```
 
 ## 3. Per-epoch solver flow
@@ -325,11 +326,24 @@ surveyed antenna position to measure true accuracy.
 
 ---
 
-## 9. Viewer
+## 9. Runs and viewer
 
-`build_viewer.py` reads the config names from `comparison.csv`, converts every `out_<config>.csv` to lat/lon/h, and
-fills `viewer_template.html`. The result, `viewer.html`, shows every config on a map with tracks, per-epoch values
-and statistics against a chosen reference.
+Every run of `spp_switches.py` gets its own folder, so earlier results are never overwritten:
+
+```
+run1/
+├── config.json        settings of every config in this run
+├── comparison.csv     one summary row per config
+├── out_s0_LS.csv …    one fix per epoch per config
+└── viewer.html        made by build_viewer.py
+run2/
+└── …
+```
+
+`build_viewer.py` takes the newest `run<N>/` (or the one you name), reads the config names from its
+`comparison.csv`, converts every `out_<config>.csv` to lat/lon/h and fills `viewer_template.html`. The resulting
+`viewer.html` shows every config on a map with tracks, per-epoch values and statistics against a chosen
+reference.
 
 ---
 

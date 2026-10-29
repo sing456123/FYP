@@ -1,7 +1,10 @@
-"""Build viewer.html from the out_<config>.csv files listed in comparison.csv (ECEF -> WGS-84 lat/lon/h). Stdlib only. Usage: python3 build_viewer.py"""
-import csv, json, math
+"""Build run<N>/viewer.html from the out_<config>.csv files listed in run<N>/comparison.csv (ECEF -> WGS-84 lat/lon/h). Stdlib only. Usage: python3 build_viewer.py [run<N>]  (default: newest run)"""
+import csv, glob, json, math, sys
 
-NAMES = [r["config"] for r in csv.DictReader(open("comparison.csv"))]
+RUNS = sorted((p for p in glob.glob("run*") if p[3:].isdigit()), key=lambda p: int(p[3:]))
+RUN = sys.argv[1] if len(sys.argv) > 1 else RUNS[-1]
+
+NAMES = [r["config"] for r in csv.DictReader(open(f"{RUN}/comparison.csv"))]
 A, E2 = 6378137.0, 6.69437999014e-3
 
 def geodetic(x, y, z):
@@ -13,7 +16,7 @@ def geodetic(x, y, z):
 
 cfgs, ep = [], None
 for name in NAMES:
-    rows = list(csv.DictReader(open(f"out_{name}.csv")))
+    rows = list(csv.DictReader(open(f"{RUN}/out_{name}.csv")))
     e = [r["epoch"] for r in rows]
     assert ep is None or e == ep, "epochs differ"
     ep = e
@@ -23,5 +26,5 @@ for name in NAMES:
                      conv=[int(r["conv"] == "True") for r in rows]))
 
 html = open("viewer_template.html").read().replace("__DATA__", json.dumps(cfgs))
-open("viewer.html", "w").write(html)
-print("viewer.html", len(html) // 1024, "KB")
+open(f"{RUN}/viewer.html", "w").write(html)
+print(f"{RUN}/viewer.html", len(html) // 1024, "KB")
