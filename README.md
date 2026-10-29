@@ -1,48 +1,75 @@
-# SPP with Correction Switches: LS / WLS / LQLC
+# SPP Correction Steps: LS vs LQLC
 
 `spp_switches.py` computes the receiver position every epoch from GNSS pseudoranges (Single Point Positioning).
-It runs the same data through several **configs**. Each config switches corrections, constellations, weighting
-and estimator on or off, and the script prints one comparison table.
+It starts from the receiver's `cor_pseudo` and adds **one correction per step**. Each step is solved with both
+**LS** and **LQLC**, which gives 8 configs and one comparison table.
 
 ```bash
-.venv/bin/python spp_switches.py data.csv
+.venv/bin/python spp_switches.py data.csv     # 8 configs → out_<config>.csv + comparison.csv
+.venv/bin/python build_viewer.py              # optional: map viewer → viewer.html
 ```
 
-**Input:** a CSV with `epoch, sat_const, sat_x, sat_y, sat_z, sat_snr, raw_pseudo, cor_pseudo`
-**Output:** `out_<N>.csv` (one fix per epoch for each config) and `comparison.csv` (one summary row per config)
+**Input:** a CSV with `epoch, tow, sat_const, sat_x, sat_y, sat_z, cor_pseudo`
 
 ---
 
-## 1. Big picture
+## 1. The steps
+
+```mermaid
+flowchart LR
+    S0["<b>step 0</b><br/>cor_pseudo<br/>(baseline)"] -->|"+ Sagnac"| S1["<b>step 1</b>"]
+    S1 -->|"+ tropo<br/>Saastamoinen"| S2["<b>step 2</b>"]
+    S2 -->|"+ iono<br/>Klobuchar"| S3["<b>step 3</b>"]
+```
+
+```mermaid
+flowchart TB
+    subgraph each [every step runs twice]
+        LS["LS"]
+        LQ["LQLC"]
+    end
+    STEPS["STEPS 0..3"] --> each --> CFG["s0_LS, s0_LQLC, … s3_LQLC"]
+```
+
+None of these corrections needs the broadcast navigation file (BRDC). Iono uses Klobuchar with RTKLIB's default
+coefficients.
+
+> **Open question:** which corrections the receiver already put into `cor_pseudo` is still to be confirmed.
+> If a step makes results *worse* (for example, the height jumps), the receiver had probably already applied
+> that correction, and the step counts it twice.
+
+---
+
+## 2. Big picture
 
 ```mermaid
 flowchart LR
     A[(data.csv)] --> B[main]
     B --> C{for each config<br/>in CONFIGS}
-    C --> D["cfg = BASE + changes"]
+    C --> D["cfg = BASE + step + estimator"]
     D --> E["run(cfg, data)"]
     E --> F["score(df)"]
-    F --> G[/out_N.csv/]
+    F --> G[/out_config.csv/]
     F --> H[/comparison.csv/]
     C -. next config .-> C
+    G --> V["build_viewer.py"] --> VH[/viewer.html/]
 ```
 
-## 2. Per-epoch solver flow
+## 3. Per-epoch solver flow
 
 ```mermaid
 flowchart TD
-    S([epoch g, previous fix θ0]) --> R0["<b>(1) fixed_sat_terms</b><br/>once per epoch<br/>rho0 = cor_pseudo if friend_cor else raw_pseudo<br/>(+ sat clock / relativity / TGD)"]
-    R0 --> INIT["θ = [x,y,z from θ0, one clock per system]"]
+    S([epoch g, previous fix θ0]) --> INIT["rho = cor_pseudo<br/>θ = [x,y,z from θ0, one clock per system]"]
     INIT --> LOOP
 
     subgraph LOOP [Iteration loop, max 2 × MAX_ITER]
         direction TB
         P{"‖θ_xyz‖ > 6000 km?<br/>(have a position yet)"}
-        P -- no --> Z["corr = 0, keep all, el = NaN"]
-        P -- yes --> IT["<b>(2) iter_terms</b><br/>el, az from current θ<br/>tropo + Sagnac → corr<br/>mask: el ≥ mask_deg"]
+        P -- no --> Z["corr = 0, keep all"]
+        P -- yes --> IT["<b>iter_terms</b><br/>el, az from current θ<br/>Sagnac + tropo + iono → corr<br/>mask: el ≥ mask_deg"]
         Z --> Y
-        IT --> Y["residual  y = rho0 − (range + clock + corr)<br/>Jacobian  H = [−LOS unit vector | system clock 1]"]
-        Y --> W["w = prior_weight × keep"]
+        IT --> Y["residual  y = rho − (range + clock + corr)<br/>Jacobian  H = [−LOS unit vector | system clock 1]"]
+        Y --> W["w = keep (0 or 1)"]
         W --> RB{robust_on?}
         RB -- yes --> LW["w ×= lqlc_weight(y, s)"]
         RB -- no --> CHK
@@ -59,7 +86,9 @@ flowchart TD
     OK --> NEXT["next epoch starts from this fix"]
 ```
 
-## 3. LS → LQLC switch-over
+All corrections are recomputed **every iteration**, because they depend on the current position estimate.
+
+## 4. LS → LQLC switch-over
 
 ```mermaid
 stateDiagram-v2
@@ -77,21 +106,19 @@ residual is about 20,000 km and every satellite would get roughly the same weigh
 
 ---
 
-## 4. Functions
+## 5. Functions
 
 ```mermaid
 flowchart TB
     main --> run --> solve_epoch
     main --> score
-    solve_epoch --> fixed_sat_terms --> need_nav
     solve_epoch --> iter_terms
-    solve_epoch --> prior_weight
     solve_epoch --> lqlc_weight
     iter_terms --> el_az --> ecef_to_lla
     el_az --> enu_matrix
-    iter_terms --> tropo_saastamoinen --> ecef_to_lla
     iter_terms --> sagnac
-    iter_terms --> need_nav
+    iter_terms --> tropo_saastamoinen --> ecef_to_lla
+    iter_terms --> iono_klobuchar --> ecef_to_lla
     score --> ecef_to_lla
     score --> enu_matrix
 ```
@@ -101,12 +128,10 @@ flowchart TB
 | `ecef_to_lla(p)` | helper | ECEF → geodetic lat/lon/height (WGS-84, 5 iterations) |
 | `enu_matrix(lat, lon)` | helper | Rotation from an ECEF difference to local East/North/Up |
 | `el_az(sat, rx)` | every iteration | Elevation and azimuth of each satellite from the receiver |
-| `tropo_saastamoinen(el, rx)` | every iteration | Tropospheric delay (m), standard atmosphere |
 | `sagnac(sat, rx)` | every iteration | Earth-rotation range term (m) |
-| `need_nav(name)` | stub | Raises an error: the correction needs the BRDC navigation file |
-| `fixed_sat_terms(g, cfg)` | once per epoch | Builds `rho0` and blocks corrections that would be applied twice |
-| `iter_terms(sat, θ, cfg, have_pos)` | every iteration | Position-dependent corrections and elevation mask from the current θ |
-| `prior_weight(el, snr, cfg)` | every iteration | Weight set before looking at residuals: none / elevation / SNR |
+| `tropo_saastamoinen(el, rx)` | every iteration | Tropospheric delay (m). Returns 0 outside 0–10 km height (still converging) |
+| `iono_klobuchar(el, az, rx, tow)` | every iteration | Ionospheric L1 delay (m), default coefficients |
+| `iter_terms(...)` | every iteration | Adds up the switched-on corrections and applies the elevation mask |
 | `lqlc_weight(y, s)` | robust phase | Robust weight from the residuals |
 | `solve_epoch(g, θ0, cfg)` | per epoch | Gauss-Newton / IRLS solver |
 | `run(cfg, data)` | per config | Loops over epochs and carries each converged fix forward |
@@ -114,69 +139,43 @@ flowchart TB
 
 ---
 
-## 5. Switches
+## 6. Settings
 
-All settings live in `BASE`. Each entry in `CONFIGS` overrides only the keys it names.
+`BASE` holds the defaults. Each config is `BASE` + one entry of `STEPS` + an estimator.
 
-```mermaid
-flowchart LR
-    subgraph FR [Friend's lumped correction]
-        fc["friend_cor = True<br/>sat clock + iono + tropo<br/>in one term (cor_pseudo)"]
-    end
-    subgraph NAV [Needs BRDC nav file]
-        sc[sat_clock]; rel[relativity]; tgd[tgd]; ion[iono]
-    end
-    subgraph LOCAL [Computed here]
-        tr[tropo]; sg[sagnac]; mk[mask_deg]
-    end
-    subgraph EST [Estimation]
-        sys["systems<br/>[1] or [1,4,8,32]"]
-        wt["weight<br/>none / elev / snr"]
-        es["estimator<br/>LS / LQLC, scale s"]
-    end
-    fc -. "blocked: would<br/>double count" .-x NAV
-    fc -. "blocked" .-x tr
-    FR --> LOCAL --> EST
-```
-
-| Switch | Values | Meaning |
+| Setting | Values | Meaning |
 |---|---|---|
-| `friend_cor` | bool | Your friend's satellite clock + iono + tropo as one lumped term (uses `cor_pseudo`). `False` uses uncorrected `raw_pseudo`. Turn it off before switching on `sat_clock`, `iono`, `tropo`, `tgd` or `relativity` |
-| `sat_clock` | bool | + c·dt_sat (needs NAV) |
-| `relativity` | bool | + relativistic clock term (needs NAV) |
-| `tgd` | bool | − c·TGD group delay (needs NAV) |
-| `iono` | bool | Klobuchar ionosphere (needs NAV) |
-| `tropo` | bool | Saastamoinen, recomputed every iteration |
-| `sagnac` | bool | Earth rotation, recomputed every iteration |
-| `systems` | list | `1` GPS, `4` GLONASS, `8` Galileo, `32` BeiDou. One clock unknown per system |
+| `sagnac` | bool | Earth-rotation term (set by `STEPS`) |
+| `tropo` | bool | Saastamoinen troposphere (set by `STEPS`) |
+| `iono` | bool | Klobuchar ionosphere (set by `STEPS`) |
+| `estimator` | `LS` / `LQLC` | Plain least squares, or LS followed by robust LQLC (both are run) |
 | `mask_deg` | degrees | Satellites below this elevation get weight 0 |
-| `weight` | `none` / `elev` / `snr` | Prior weighting model |
-| `estimator` | `LS` / `LQLC` | Plain least squares, or LS followed by robust LQLC |
 | `s` | metres | LQLC scale. Larger values behave more like LS |
+| `systems` | list | `1` GPS, `4` GLONASS, `8` Galileo, `32` BeiDou. One clock unknown per system |
 
 Other settings: `REF_XYZ` (surveyed antenna ECEF, enables true-error scoring), `MAX_ITER`, `TOL`.
 
 ---
 
-## 6. Math
+## 7. Math
 
-### 6.1 Measurement model
+### 7.1 Measurement model
 
 For satellite $i$ in constellation $k$:
 
 $$
-\rho_i = \lVert \mathbf{r}^{s}_i - \mathbf{r} \rVert + c\,\delta t_k + T_i + I_i + S_i - c\,\delta t^{s}_i + \varepsilon_i
+\rho_i = \lVert \mathbf{r}^{s}_i - \mathbf{r} \rVert + c\,\delta t_k + S_i + T_i + I_i + \varepsilon_i
 $$
 
-Unknowns: $\boldsymbol\theta = [x,\ y,\ z,\ c\delta t_{GPS},\ c\delta t_{GLO},\ \dots]$. Every constellation keeps its own
-time, so each one gets its own receiver clock.
+Unknowns: $\boldsymbol\theta = [x,\ y,\ z,\ c\delta t_{GPS},\ \dots]$. Every constellation keeps its own time, so each
+one gets its own receiver clock.
 
-### 6.2 Linearisation
+### 7.2 Linearisation
 
 ```mermaid
 flowchart LR
     T["θₙ (current guess)"] --> PR["predicted<br/>range + clock + corr"]
-    RHO["rho0 (measured)"] --> RES["y = rho0 − predicted"]
+    RHO["rho (measured)"] --> RES["y = rho − predicted"]
     PR --> RES
     T --> HM["H rows:<br/>[ −e_i | 0 … 1 … 0 ]"]
     RES --> WLS["dθ = (HᵀWH)⁻¹HᵀWy"]
@@ -185,14 +184,14 @@ flowchart LR
 ```
 
 $$
-y_i = \rho_{0,i} - \left(\lVert \mathbf{r}^{s}_i - \mathbf{r}_n \rVert + c\delta t_k + T_i + S_i\right),
+y_i = \rho_i - \left(\lVert \mathbf{r}^{s}_i - \mathbf{r}_n \rVert + c\delta t_k + S_i + T_i + I_i\right),
 \qquad
 \mathbf{H}_i = \Big[\, -\mathbf{e}_i^\top \;\big|\; 0 \cdots 1_{(k)} \cdots 0 \,\Big],
 \qquad
 \mathbf{e}_i = \frac{\mathbf{r}^{s}_i - \mathbf{r}_n}{\lVert \mathbf{r}^{s}_i - \mathbf{r}_n \rVert}
 $$
 
-### 6.3 Weighted least squares step
+### 7.3 Weighted least squares step
 
 $$
 \Delta\boldsymbol\theta = (\mathbf{H}^\top \mathbf{W} \mathbf{H})^{-1}\mathbf{H}^\top \mathbf{W}\,\mathbf{y},
@@ -201,25 +200,14 @@ $$
 
 Iterate until $\lVert \Delta\boldsymbol\theta_{xyz} \rVert < 1\ \text{mm}$.
 
-The total weight is the product of three factors:
-
 ```mermaid
 flowchart LR
     M["mask<br/>el ≥ mask_deg → 1, else 0"] --> X(("×"))
-    PW["prior<br/>1 / sin²el / SNR"] --> X
     LQ["LQLC<br/>tanh(x)/x<br/>(robust phase only)"] --> X
     X --> W["w_i"]
 ```
 
-### 6.4 Prior weights
-
-| Mode | Weight | Assumption |
-|---|---|---|
-| `none` | $w_i = 1$ | All satellites equally good |
-| `elev` | $w_i = \sin^2(el_i)$ | $\sigma_i \propto 1/\sin(el_i)$: low satellites see more atmosphere and multipath |
-| `snr` | $w_i = 10^{(C/N_0)_i/10} \,/\, 10^{4.5}$ | Variance $\propto 1/(C/N_0)_{\text{linear}}$, normalised to 45 dB-Hz |
-
-### 6.5 LQLC robust estimator
+### 7.4 LQLC robust estimator
 
 Instead of $\sum r_i^2$, minimise
 
@@ -242,7 +230,16 @@ $$
 $w \to 1$ for small residuals and $w \approx 2s/\lvert r\rvert$ for large ones. The constant $1/(4s^2)$ cancels in
 the normal equations.
 
-### 6.6 Troposphere (Saastamoinen, RTKLIB form)
+### 7.5 Sagnac (step 1)
+
+While the signal travels for about 70 ms, the Earth rotates under it:
+
+$$
+S_i = \frac{\omega_e}{c}\left(x^{s}_i\,y_r - y^{s}_i\,x_r\right),
+\qquad \omega_e = 7.2921151467\times10^{-5}\ \text{rad/s}
+$$
+
+### 7.6 Troposphere: Saastamoinen (step 2)
 
 $$
 \begin{aligned}
@@ -255,16 +252,42 @@ T_i &= \frac{\text{ZHD} + \text{ZWD}}{\sin(\max(el_i,\ 1^\circ))}
 \end{aligned}
 $$
 
-### 6.7 Sagnac (Earth rotation)
+### 7.7 Ionosphere: Klobuchar (step 3)
 
-While the signal travels for about 70 ms, the Earth rotates under it:
+```mermaid
+flowchart LR
+    A["el, az, receiver lat/lon"] --> B["pierce point<br/>φ_i, λ_i"]
+    B --> C["geomagnetic lat φ_m"]
+    C --> D["amplitude A, period P<br/>(cubic in φ_m)"]
+    T["tow → local time t"] --> E
+    D --> E["cosine model<br/>day bump at 14:00"]
+    E --> F["× slant factor F<br/>× (f_L1/f)²"]
+```
+
+All angles are in semicircles. $E$ is elevation and $A_z$ is azimuth:
 
 $$
-S_i = \frac{\omega_e}{c}\left(x^{s}_i\,y_r - y^{s}_i\,x_r\right),
-\qquad \omega_e = 7.2921151467\times10^{-5}\ \text{rad/s}
+\begin{aligned}
+\psi &= \frac{0.0137}{E + 0.11} - 0.022 \\
+\varphi_i &= \varphi_u + \psi\cos A_z \quad (\text{clamped to } \pm 0.416) \\
+\lambda_i &= \lambda_u + \frac{\psi \sin A_z}{\cos \varphi_i} \\
+\varphi_m &= \varphi_i + 0.064\cos(\lambda_i - 1.617) \\
+t &= 43200\,\lambda_i + t_{GPS} \pmod{86400} \\
+A &= \textstyle\max\!\left(0,\ \sum_{n=0}^{3}\alpha_n\varphi_m^n\right),\qquad
+P = \max\!\left(72000,\ \sum_{n=0}^{3}\beta_n\varphi_m^n\right) \\
+x &= \frac{2\pi(t - 50400)}{P},\qquad F = 1 + 16(0.53 - E)^3 \\
+I_i &= c\,F \cdot
+\begin{cases}
+5\times10^{-9} + A\left(1 - \frac{x^2}{2} + \frac{x^4}{24}\right) & |x| < 1.57\\
+5\times10^{-9} & \text{otherwise}
+\end{cases}
+\end{aligned}
 $$
 
-### 6.8 Elevation and azimuth
+For non-GPS systems the L1 delay is scaled by $(f_{L1}/f)^2$, with nominal frequencies for GLONASS G1, Galileo E1
+and BeiDou B1I.
+
+### 7.8 Elevation and azimuth
 
 ```mermaid
 flowchart LR
@@ -284,7 +307,7 @@ $$
 
 ---
 
-## 7. Scoring
+## 8. Scoring
 
 ```mermaid
 flowchart TD
@@ -293,17 +316,30 @@ flowchart TD
     Q -- yes --> S2["error vs truth (ENU)<br/>hRMS, h95, vRMS, bias E/N/U<br/><i>= accuracy</i>"]
 ```
 
-Without `REF_XYZ` the table only measures **precision**: how tightly the fixes cluster. A config can be precise
-and still biased, so set `REF_XYZ` to a surveyed antenna position to measure true accuracy.
+Without `REF_XYZ` the table only measures **precision**: how tightly the fixes cluster. A correction mostly shifts
+the mean position, which spread can't show. Watch `mean_h`, `lat` and `lon` between steps, and set `REF_XYZ` to a
+surveyed antenna position to measure true accuracy.
 
 ---
 
-## 8. Adding a config
+## 9. Viewer
 
-Add one line to `CONFIGS` containing only the keys that differ from `BASE`:
+`build_viewer.py` reads the config names from `comparison.csv`, converts every `out_<config>.csv` to lat/lon/h, and
+fills `viewer_template.html`. The result, `viewer.html`, shows every config on a map with tracks, per-epoch values
+and statistics against a chosen reference.
+
+---
+
+## 10. Adding a step
+
+Append one dict to `STEPS`. It runs with both LS and LQLC automatically:
 
 ```python
-"7 all GNSS, LQLC + snr": dict(systems=[1, 4, 8, 32], estimator="LQLC", weight="snr"),
+STEPS = [
+    dict(),
+    dict(sagnac=True),
+    dict(sagnac=True, tropo=True),
+    dict(sagnac=True, tropo=True, iono=True),
+    dict(sagnac=True, tropo=True, iono=True, mask_deg=15.0),   # step 4 → s4_LS, s4_LQLC
+]
 ```
-
-The first word of the name (`7`) becomes the output file name `out_7.csv`.
