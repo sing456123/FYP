@@ -5,9 +5,11 @@ Input pseudorange: cor_pseudo (receiver-corrected; which corrections it already 
 still to be confirmed with the supervisor). Each step adds ONE correction on top:
 
   step 0 : cor_pseudo                      (baseline)
-  step 1 : + sagnac                        Earth rotation during signal travel
-  step 2 : + tropo                         Saastamoinen, standard atmosphere
-  step 3 : + iono                          Klobuchar with RTKLIB default coefficients (no BRDC)
+  step 1 : + tropo                         Saastamoinen, standard atmosphere
+  step 2 : + iono                          Klobuchar with RTKLIB default coefficients (no BRDC)
+
+Sagnac is NOT a step: turning it on moved the fix ~32 m E-W off the antenna site,
+so the data already includes Earth rotation (most likely in sat_x/y/z, maybe in cor_pseudo).
 
 Each step runs with LS and with LQLC. If a step makes results worse (e.g. height jumps),
 the receiver had probably already applied that correction.
@@ -32,7 +34,7 @@ ION_DEFAULT = [0.1118e-07, -0.7451e-08, -0.5961e-07, 0.1192e-06,  # alpha  (RTKL
 
 # ============================== SWITCHES ==============================
 BASE = dict(
-    sagnac=False,        # Earth-rotation range term
+    sagnac=False,        # Earth-rotation range term; keep False: data already includes it
     tropo=False,         # Saastamoinen
     iono=False,          # Klobuchar, default coefficients
     systems=[1],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
@@ -42,9 +44,8 @@ BASE = dict(
 )
 STEPS = [                # each step adds one correction to the previous
     dict(),
-    dict(sagnac=True),
-    dict(sagnac=True, tropo=True),
-    dict(sagnac=True, tropo=True, iono=True),
+    dict(tropo=True),
+    dict(tropo=True, iono=True),
 ]
 CONFIGS = {f"s{i}_{est}": dict(**step, estimator=est)       # s0_LS, s0_LQLC, s1_LS, ...
            for i, step in enumerate(STEPS) for est in ("LS", "LQLC")}

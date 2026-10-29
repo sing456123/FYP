@@ -2,10 +2,10 @@
 
 `spp_switches.py` computes the receiver position every epoch from GNSS pseudoranges (Single Point Positioning).
 It starts from the receiver's `cor_pseudo` and adds **one correction per step**. Each step is solved with both
-**LS** and **LQLC**, which gives 8 configs and one comparison table.
+**LS** and **LQLC**, which gives 6 configs and one comparison table.
 
 ```bash
-.venv/bin/python spp_switches.py data.csv     # 8 configs → out_<config>.csv + comparison.csv
+.venv/bin/python spp_switches.py data.csv     # 6 configs → out_<config>.csv + comparison.csv
 .venv/bin/python build_viewer.py              # optional: map viewer → viewer.html
 ```
 
@@ -17,9 +17,8 @@ It starts from the receiver's `cor_pseudo` and adds **one correction per step**.
 
 ```mermaid
 flowchart LR
-    S0["<b>step 0</b><br/>cor_pseudo<br/>(baseline)"] -->|"+ Sagnac"| S1["<b>step 1</b>"]
-    S1 -->|"+ tropo<br/>Saastamoinen"| S2["<b>step 2</b>"]
-    S2 -->|"+ iono<br/>Klobuchar"| S3["<b>step 3</b>"]
+    S0["<b>step 0</b><br/>cor_pseudo<br/>(baseline)"] -->|"+ tropo<br/>Saastamoinen"| S1["<b>step 1</b>"]
+    S1 -->|"+ iono<br/>Klobuchar"| S2["<b>step 2</b>"]
 ```
 
 ```mermaid
@@ -28,11 +27,15 @@ flowchart TB
         LS["LS"]
         LQ["LQLC"]
     end
-    STEPS["STEPS 0..3"] --> each --> CFG["s0_LS, s0_LQLC, … s3_LQLC"]
+    STEPS["STEPS 0..2"] --> each --> CFG["s0_LS, s0_LQLC, … s2_LQLC"]
 ```
 
 None of these corrections needs the broadcast navigation file (BRDC). Iono uses Klobuchar with RTKLIB's default
 coefficients.
+
+> **Sagnac is not a step.** With it switched on, the fix moved about 32 m east–west, away from the antenna site,
+> while step 0 lands on it. So the data already includes Earth rotation (most likely in `sat_x/y/z`, possibly in `cor_pseudo`), and `sagnac`
+> stays `False`.
 
 > **Open question:** which corrections the receiver already put into `cor_pseudo` is still to be confirmed.
 > If a step makes results *worse* (for example, the height jumps), the receiver had probably already applied
@@ -145,7 +148,7 @@ flowchart TB
 
 | Setting | Values | Meaning |
 |---|---|---|
-| `sagnac` | bool | Earth-rotation term (set by `STEPS`) |
+| `sagnac` | bool | Earth-rotation term. Keep `False`: the data already includes it |
 | `tropo` | bool | Saastamoinen troposphere (set by `STEPS`) |
 | `iono` | bool | Klobuchar ionosphere (set by `STEPS`) |
 | `estimator` | `LS` / `LQLC` | Plain least squares, or LS followed by robust LQLC (both are run) |
@@ -230,7 +233,7 @@ $$
 $w \to 1$ for small residuals and $w \approx 2s/\lvert r\rvert$ for large ones. The constant $1/(4s^2)$ cancels in
 the normal equations.
 
-### 7.5 Sagnac (step 1)
+### 7.5 Sagnac (switch only, not a step)
 
 While the signal travels for about 70 ms, the Earth rotates under it:
 
@@ -239,7 +242,7 @@ S_i = \frac{\omega_e}{c}\left(x^{s}_i\,y_r - y^{s}_i\,x_r\right),
 \qquad \omega_e = 7.2921151467\times10^{-5}\ \text{rad/s}
 $$
 
-### 7.6 Troposphere: Saastamoinen (step 2)
+### 7.6 Troposphere: Saastamoinen (step 1)
 
 $$
 \begin{aligned}
@@ -252,7 +255,7 @@ T_i &= \frac{\text{ZHD} + \text{ZWD}}{\sin(\max(el_i,\ 1^\circ))}
 \end{aligned}
 $$
 
-### 7.7 Ionosphere: Klobuchar (step 3)
+### 7.7 Ionosphere: Klobuchar (step 2)
 
 ```mermaid
 flowchart LR
@@ -337,9 +340,8 @@ Append one dict to `STEPS`. It runs with both LS and LQLC automatically:
 ```python
 STEPS = [
     dict(),
-    dict(sagnac=True),
-    dict(sagnac=True, tropo=True),
-    dict(sagnac=True, tropo=True, iono=True),
-    dict(sagnac=True, tropo=True, iono=True, mask_deg=15.0),   # step 4 → s4_LS, s4_LQLC
+    dict(tropo=True),
+    dict(tropo=True, iono=True),
+    dict(tropo=True, iono=True, mask_deg=15.0),   # step 3 → s3_LS, s3_LQLC
 ]
 ```
