@@ -14,7 +14,8 @@ Flow per epoch:
                    y = rho - pred(theta_n);  dtheta = (H^T W H)^-1 H^T W y
   next epoch starts from this epoch's fix
 
-Usage:  python spp_switches.py data.csv      -> results go to the next free run<N>/ folder
+Usage:  python spp_switches.py data.csv          -> results go to the next free run<N>/ folder
+        python spp_switches.py data.csv run1     -> re-run run1/ from its own config.json
 """
 import sys
 import json
@@ -166,8 +167,14 @@ def solve_epoch(g, theta0, cfg):
             if cfg["estimator"] == "LQLC" and not robust_on:
                 robust_on = True                                    # LS first, then LQLC
             else:
-                return dict(theta=theta, nsat=int(keep.sum()), iters=it + 1, converged=True)
-    return dict(theta=theta, nsat=int(keep.sum()), iters=it + 1, converged=False)
+                return result(theta, y, keep, it, True)
+    return result(theta, y, keep, it, False)
+
+
+def result(theta, y, keep, it, converged):
+    r = y[keep]                                                     # post-fit residuals of used sats
+    return dict(theta=theta, nsat=int(keep.sum()), iters=it + 1, converged=converged,
+                res_rms=np.sqrt(np.mean(r ** 2)), res_max=np.abs(r).max())
 
 
 # ---------------- run all configs ----------------
@@ -179,7 +186,8 @@ def run(cfg, data):
         r = solve_epoch(g, theta, cfg)
         if r is None: continue
         out.append(dict(epoch=ep, x=r["theta"][0], y=r["theta"][1], z=r["theta"][2],
-                        nsat=r["nsat"], iters=r["iters"], conv=r["converged"]))
+                        nsat=r["nsat"], iters=r["iters"], conv=r["converged"],
+                        res_rms=r["res_rms"], res_max=r["res_max"]))
         if r["converged"] and np.linalg.norm(r["theta"][:3]) > 6.0e6:
             theta = r["theta"]
     return pd.DataFrame(out)
@@ -194,7 +202,7 @@ def score(df, ref):
     hs = np.hypot(sp[:, 0], sp[:, 1])
     row = dict(epochs=len(df), conv_pct=100 * df.conv.mean(), sats=df.nsat.mean(), iters=df.iters.mean(),
                h_spread=np.sqrt((hs ** 2).mean()), h95_spread=np.percentile(hs, 95), v_spread=sp[:, 2].std(),
-               mean_h=h)
+               mean_h=h, res_rms=df.res_rms.mean(), res_max=df.res_max.mean())
     if ref is not None:
         e = (P - ref) @ R.T
         hz = np.hypot(e[:, 0], e[:, 1])
@@ -207,12 +215,16 @@ def score(df, ref):
 
 if __name__ == "__main__":
     data = pd.read_csv(sys.argv[1] if len(sys.argv) > 1 else "data.csv")
-    n = 1 + max([int(p.name[3:]) for p in Path(".").glob("run*") if p.name[3:].isdigit()], default=0)
-    out = Path(f"run{n}"); out.mkdir()
-    json.dump({name: {**BASE, **change} for name, change in CONFIGS.items()}, open(out / "config.json", "w"), indent=1)
+    if len(sys.argv) > 2:                 # re-run an existing run<N>/ from its own config.json
+        out = Path(sys.argv[2])
+        configs = json.load(open(out / "config.json"))
+    else:
+        n = 1 + max([int(p.name[3:]) for p in Path(".").glob("run*") if p.name[3:].isdigit()], default=0)
+        out = Path(f"run{n}"); out.mkdir()
+        configs = {name: {**BASE, **change} for name, change in CONFIGS.items()}
+        json.dump(configs, open(out / "config.json", "w"), indent=1)
     rows = []
-    for name, change in CONFIGS.items():
-        cfg = {**BASE, **change}
+    for name, cfg in configs.items():
         df = run(cfg, data)
         rows.append(dict(config=name, **score(df, REF_XYZ)))
         df.to_csv(out / f"out_{name}.csv", index=False)

@@ -5,8 +5,9 @@ It solves every epoch with both **LS** and **LQLC** on the receiver's `cor_pseud
 you change the satellites, elevation mask or LQLC scale in `BASE`.
 
 ```bash
-.venv/bin/python spp_switches.py data.csv     # LS + LQLC → next free run<N>/ folder, viewer included
-.venv/bin/python build_viewer.py run1         # rebuild the viewer for one run (newest if omitted)
+.venv/bin/python spp_switches.py data.csv       # LS + LQLC → next free run<N>/ folder, viewer included
+.venv/bin/python spp_switches.py data.csv run1  # re-run run1/ from its own config.json (same settings)
+.venv/bin/python build_viewer.py run1           # rebuild the viewer for one run (newest if omitted)
 ```
 
 **Input:** a CSV with `epoch, tow, sat_const, sat_x, sat_y, sat_z, cor_pseudo`
@@ -315,6 +316,11 @@ flowchart TD
     Q -- yes --> S2["error vs truth (ENU)<br/>hRMS, h95, vRMS, bias E/N/U<br/><i>= accuracy</i>"]
 ```
 
+Every config also records its **post-fit residuals**: for each epoch, `res_rms` and `res_max` of
+$y_i = \rho_i - \hat\rho_i$ over the satellites used, saved in `out_<config>.csv` and averaged in `comparison.csv`.
+They show how well the measurements fit the solution. LQLC usually has a slightly *higher* `res_rms` than LS,
+because it lets outliers keep their large residuals instead of bending the position toward them.
+
 Without `REF_XYZ` the table only measures **precision**: how tightly the fixes cluster. A correction mostly shifts
 the mean position, which spread can't show. Watch `mean_h`, `lat` and `lon` between runs, and set `REF_XYZ` to a
 surveyed antenna position to measure true accuracy.
@@ -338,8 +344,9 @@ run2/
 
 `build_viewer.py` takes the newest `run<N>/` (or the one you name), reads the config names from its
 `comparison.csv`, converts every `out_<config>.csv` to lat/lon/h and fills `viewer_template.html`. The resulting
-`viewer.html` shows every config on a map with tracks, per-epoch values and statistics against a chosen
-reference.
+`viewer.html` shows every config on a map with tracks, per-epoch values (including the residual RMS), statistics
+against a chosen reference, and, for reference, each config's spread around its own mean and its average
+residuals.
 
 ---
 

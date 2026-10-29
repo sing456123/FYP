@@ -22,6 +22,9 @@ input[type=number]{width:95px} h4{margin:10px 0 4px}
  <canvas id="cv" width="420" height="420"></canvas>
  <h4>Current epoch</h4><table id="cur"></table>
  <h4>Stats vs reference (all epochs, converged only)</h4><table id="stats"></table>
+ <h4>Spread around own mean &amp; residuals (for reference)</h4><table id="spread"></table>
+ <div style="color:#666;font-size:11px">spread: H rms / H95 / V std of each config's fixes around its own mean ·
+ res: post-fit pseudorange residuals of the used satellites, RMS and max |res| averaged over epochs (m)</div>
 </div>
 <script>
 const D=__DATA__, N=D[0].lat.length, COL=["#999","#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#a65628","#f781bf"];
@@ -61,9 +64,9 @@ function show(){
   D.forEach((c,i)=>{const m=mk[i],t=tr[i];
     if(on[i]){m.setLatLng([c.lat[k],c.lon[k]]).addTo(map)}else m.remove();
     if(on[i]&&$("tracks").checked)t.addTo(map);else t.remove()});
-  let h="<tr><th>config<th>lat<th>lon<th>h<th>E<th>N<th>nsat";
+  let h="<tr><th>config<th>lat<th>lon<th>h<th>E<th>N<th>nsat<th>res rms";
   D.forEach((c,i)=>{if(!on[i])return;const [e,n]=enu(c,k);
-    h+=`<tr style="color:${COL[i]}"><td>${c.name.split(" ")[0]}<td>${c.lat[k].toFixed(8)}<td>${c.lon[k].toFixed(8)}<td>${c.h[k].toFixed(2)}<td>${e.toFixed(2)}<td>${n.toFixed(2)}<td>${c.nsat[k]}`});
+    h+=`<tr style="color:${COL[i]}"><td>${c.name.split(" ")[0]}<td>${c.lat[k].toFixed(8)}<td>${c.lon[k].toFixed(8)}<td>${c.h[k].toFixed(2)}<td>${e.toFixed(2)}<td>${n.toFixed(2)}<td>${c.nsat[k]}<td>${c.res[k].toFixed(2)}`});
   $("cur").innerHTML=h;draw();
 }
 function draw(){
@@ -84,5 +87,7 @@ function stats(){
     h+=`<tr style="color:${COL[i]}"><td>${c.name.split(" ")[0]}<td>${m(cl).toFixed(8)}<td>${m(co).toFixed(8)}<td>${m(E).toFixed(2)}<td>${m(Nn).toFixed(2)}<td>${m(U).toFixed(2)}<td>${rms(Hh).toFixed(2)}<td>${p95.toFixed(2)}<td>${rms(U).toFixed(2)}`});
   $("stats").innerHTML=h;
 }
+$("spread").innerHTML="<tr><th>config<th>H rms<th>H95<th>V std<th>res rms<th>res max"+D.map((c,i)=>{const s=c.spread;
+  return `<tr style="color:${COL[i]}"><td>${c.name}<td>${s.h_spread}<td>${s.h95_spread}<td>${s.v_spread}<td>${s.res_rms}<td>${s.res_max}`}).join("");
 $("refsel").onchange();map.setView([ref.lat,ref.lon],19);show();
 </script></body></html>
