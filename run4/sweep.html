@@ -1,0 +1,177 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LQLC Sweep Summary</title>
+<style>
+:root{color-scheme:light;--bg:#fcfcfb;--card:#ffffff;--ink:#0b0b0b;--ink2:#52514e;--muted:#8a8984;--line:#e6e5e0;--grid:#eeede8;
+ --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--ls:#52514e;--sel:#0b0b0b;
+ --q1:#cde2fb;--q2:#b7d3f6;--q3:#9ec5f4;--q4:#6da7ec;--q5:#3987e5;--q6:#256abf;--q7:#184f95;--t1:#0b0b0b;--t2:#0b0b0b;--t3:#0b0b0b;--t4:#ffffff;--t5:#ffffff;--t6:#ffffff;--t7:#ffffff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#1a1a19;--card:#222220;--ink:#f0efec;--ink2:#c3c2b7;--muted:#8f8e86;--line:#383835;--grid:#2e2e2b;
+ --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--ls:#c3c2b7;--sel:#f0efec;
+ --q1:#104281;--q2:#184f95;--q3:#1c5cab;--q4:#256abf;--q5:#3987e5;--q6:#6da7ec;--q7:#9ec5f4;--t1:#f0efec;--t2:#f0efec;--t3:#f0efec;--t4:#f0efec;--t5:#f0efec;--t6:#0b0b0b;--t7:#0b0b0b}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#1a1a19;--card:#222220;--ink:#f0efec;--ink2:#c3c2b7;--muted:#8f8e86;--line:#383835;--grid:#2e2e2b;
+ --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--ls:#c3c2b7;--sel:#f0efec;
+ --q1:#104281;--q2:#184f95;--q3:#1c5cab;--q4:#256abf;--q5:#3987e5;--q6:#6da7ec;--q7:#9ec5f4;--t1:#f0efec;--t2:#f0efec;--t3:#f0efec;--t4:#f0efec;--t5:#f0efec;--t6:#0b0b0b;--t7:#0b0b0b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px} h2{font-size:15px;margin:0 0 2px} .sub{color:var(--ink2);margin:0}
+.muted{color:var(--muted);font-size:12px}
+.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end;margin:20px 0 16px;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+.controls label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink2)}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:120px}
+.summary{margin:0 0 16px;padding:12px 14px;border-left:3px solid var(--s1);background:var(--card);border-radius:0 10px 10px 0}
+.summary p{margin:2px 0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile .k{font-size:12px;color:var(--ink2)} .tile .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.tile .d{font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums} .tile.on{outline:2px solid var(--s1);outline-offset:-1px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;position:relative;min-width:0}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.14);display:none;white-space:nowrap;z-index:2}
+.tip .sw{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink2);margin:6px 0 4px}
+.legend span{display:inline-flex;align-items:center;gap:6px} .legend i{display:inline-block;width:16px;height:3px;border-radius:2px}
+.legend i.dash{background:repeating-linear-gradient(90deg,var(--ls) 0 4px,transparent 4px 7px)!important}
+.heat{overflow-x:auto} table{border-collapse:separate;border-spacing:2px;font-variant-numeric:tabular-nums;width:100%}
+th{font-weight:600;font-size:12px;color:var(--ink2);padding:6px 8px;text-align:center}
+td{padding:9px 8px;text-align:center;border-radius:6px;cursor:pointer;font-size:13px;position:relative}
+td.ls{background:transparent;border:1px dashed var(--line);color:var(--ink2)}
+td.sel{outline:2px solid var(--sel);outline-offset:1px}
+td .star{font-size:11px;margin-left:3px}
+.q1{background:var(--q1);color:var(--t1)}.q2{background:var(--q2);color:var(--t2)}.q3{background:var(--q3);color:var(--t3)}.q4{background:var(--q4);color:var(--t4)}.q5{background:var(--q5);color:var(--t5)}.q6{background:var(--q6);color:var(--t6)}.q7{background:var(--q7);color:var(--t7)}
+.scale{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);margin-top:8px}
+.scale b{display:inline-block;width:22px;height:10px;border-radius:2px}
+</style></head><body><main>
+<h1>LQLC sweep: <span id="run"></span></h1>
+<p class="sub" id="meta"></p>
+<p class="muted">Spread = how widely each config's fixes scatter around their own mean (no ground truth, so this is precision, not accuracy). Lower is better.</p>
+
+<div class="controls">
+ <label>Metric<select id="metric"></select></label>
+ <label>Elevation mask<select id="mask"></select></label>
+ <label>LQLC scale s<select id="s"></select></label>
+ <span class="muted">Tip: click any heatmap cell to select it.</span>
+</div>
+
+<div class="summary" id="summary"></div>
+<div class="tiles" id="tiles"></div>
+
+<div class="grid2">
+ <div class="card"><h2 id="tA"></h2><p class="muted" id="sA"></p><div class="legend" id="lA"></div><div id="cA"></div><div class="tip"></div></div>
+ <div class="card"><h2 id="tB"></h2><p class="muted" id="sB"></p><div class="legend" id="lB"></div><div id="cB"></div><div class="tip"></div></div>
+</div>
+
+<div class="card"><h2 id="tH"></h2><p class="muted">Rows: elevation mask · columns: LS (dashed, for reference), then LQLC by s. ★ = lowest LQLC value. Stronger blue = larger.</p>
+ <div class="heat"><table id="heat"></table></div>
+ <div class="scale" id="scale"></div>
+</div>
+
+<script>
+const R={"run": "run4", "systems": [1, 4, 8, 32], "epochs": 6693, "rows": [{"config": "LS_m5", "estimator": "LS", "mask_deg": 5.0, "s": null, "h_spread": 4.6, "h95_spread": 9.235, "v_spread": 8.808, "res_rms": 5.933, "res_max": 17.363, "mean_h": 32.897}, {"config": "LQLC_m5_s1", "estimator": "LQLC", "mask_deg": 5.0, "s": 1.0, "h_spread": 2.995, "h95_spread": 5.424, "v_spread": 4.95, "res_rms": 6.445, "res_max": 22.972, "mean_h": 28.716}, {"config": "LQLC_m5_s2", "estimator": "LQLC", "mask_deg": 5.0, "s": 2.0, "h_spread": 2.661, "h95_spread": 4.71, "v_spread": 4.216, "res_rms": 6.332, "res_max": 22.406, "mean_h": 29.41}, {"config": "LQLC_m5_s3", "estimator": "LQLC", "mask_deg": 5.0, "s": 3.0, "h_spread": 2.548, "h95_spread": 4.423, "v_spread": 3.979, "res_rms": 6.279, "res_max": 21.973, "mean_h": 29.831}, {"config": "LQLC_m5_s5", "estimator": "LQLC", "mask_deg": 5.0, "s": 5.0, "h_spread": 2.511, "h95_spread": 4.288, "v_spread": 4.005, "res_rms": 6.22, "res_max": 21.26, "mean_h": 30.329}, {"config": "LQLC_m5_s10", "estimator": "LQLC", "mask_deg": 5.0, "s": 10.0, "h_spread": 2.645, "h95_spread": 4.556, "v_spread": 4.478, "res_rms": 6.136, "res_max": 20.238, "mean_h": 30.999}, {"config": "LS_m10", "estimator": "LS", "mask_deg": 10.0, "s": null, "h_spread": 4.716, "h95_spread": 9.622, "v_spread": 8.743, "res_rms": 5.639, "res_max": 16.064, "mean_h": 31.35}, {"config": "LQLC_m10_s1", "estimator": "LQLC", "mask_deg": 10.0, "s": 1.0, "h_spread": 3.181, "h95_spread": 5.754, "v_spread": 4.516, "res_rms": 6.123, "res_max": 21.258, "mean_h": 27.516}, {"config": "LQLC_m10_s2", "estimator": "LQLC", "mask_deg": 10.0, "s": 2.0, "h_spread": 2.851, "h95_spread": 4.89, "v_spread": 3.829, "res_rms": 6.011, "res_max": 20.662, "mean_h": 28.169}, {"config": "LQLC_m10_s3", "estimator": "LQLC", "mask_deg": 10.0, "s": 3.0, "h_spread": 2.721, "h95_spread": 4.691, "v_spread": 3.594, "res_rms": 5.963, "res_max": 20.248, "mean_h": 28.546}, {"config": "LQLC_m10_s5", "estimator": "LQLC", "mask_deg": 10.0, "s": 5.0, "h_spread": 2.652, "h95_spread": 4.618, "v_spread": 3.589, "res_rms": 5.913, "res_max": 19.632, "mean_h": 28.96}, {"config": "LQLC_m10_s10", "estimator": "LQLC", "mask_deg": 10.0, "s": 10.0, "h_spread": 2.753, "h95_spread": 5.106, "v_spread": 4.064, "res_rms": 5.836, "res_max": 18.768, "mean_h": 29.533}, {"config": "LS_m15", "estimator": "LS", "mask_deg": 15.0, "s": null, "h_spread": 3.831, "h95_spread": 6.267, "v_spread": 8.224, "res_rms": 4.55, "res_max": 11.153, "mean_h": 28.362}, {"config": "LQLC_m15_s1", "estimator": "LQLC", "mask_deg": 15.0, "s": 1.0, "h_spread": 3.702, "h95_spread": 6.777, "v_spread": 5.898, "res_rms": 4.874, "res_max": 14.698, "mean_h": 25.607}, {"config": "LQLC_m15_s2", "estimator": "LQLC", "mask_deg": 15.0, "s": 2.0, "h_spread": 3.321, "h95_spread": 6.109, "v_spread": 5.343, "res_rms": 4.745, "res_max": 13.925, "mean_h": 26.384}, {"config": "LQLC_m15_s3", "estimator": "LQLC", "mask_deg": 15.0, "s": 3.0, "h_spread": 3.128, "h95_spread": 5.82, "v_spread": 4.919, "res_rms": 4.691, "res_max": 13.332, "mean_h": 26.79}, {"config": "LQLC_m15_s5", "estimator": "LQLC", "mask_deg": 15.0, "s": 5.0, "h_spread": 2.996, "h95_spread": 5.679, "v_spread": 4.624, "res_rms": 4.652, "res_max": 12.701, "mean_h": 27.163}, {"config": "LQLC_m15_s10", "estimator": "LQLC", "mask_deg": 15.0, "s": 10.0, "h_spread": 2.985, "h95_spread": 6.137, "v_spread": 4.714, "res_rms": 4.617, "res_max": 12.118, "mean_h": 27.547}, {"config": "LS_m20", "estimator": "LS", "mask_deg": 20.0, "s": null, "h_spread": 2.95, "h95_spread": 6.398, "v_spread": 4.785, "res_rms": 4.041, "res_max": 9.267, "mean_h": 25.765}, {"config": "LQLC_m20_s1", "estimator": "LQLC", "mask_deg": 20.0, "s": 1.0, "h_spread": 3.894, "h95_spread": 7.933, "v_spread": 6.395, "res_rms": 4.258, "res_max": 11.98, "mean_h": 23.603}, {"config": "LQLC_m20_s2", "estimator": "LQLC", "mask_deg": 20.0, "s": 2.0, "h_spread": 3.488, "h95_spread": 7.192, "v_spread": 6.092, "res_rms": 4.132, "res_max": 11.043, "mean_h": 24.461}, {"config": "LQLC_m20_s3", "estimator": "LQLC", "mask_deg": 20.0, "s": 3.0, "h_spread": 3.281, "h95_spread": 6.82, "v_spread": 5.72, "res_rms": 4.081, "res_max": 10.419, "mean_h": 24.936}, {"config": "LQLC_m20_s5", "estimator": "LQLC", "mask_deg": 20.0, "s": 5.0, "h_spread": 3.096, "h95_spread": 6.564, "v_spread": 5.234, "res_rms": 4.051, "res_max": 9.809, "mean_h": 25.375}, {"config": "LQLC_m20_s10", "estimator": "LQLC", "mask_deg": 20.0, "s": 10.0, "h_spread": 2.988, "h95_spread": 6.439, "v_spread": 4.903, "res_rms": 4.042, "res_max": 9.419, "mean_h": 25.656}]};
+const SYS={1:"GPS",4:"GLO",8:"GAL",32:"BDS"};
+const MET={h_spread:["Horizontal spread (RMS)",1],h95_spread:["Horizontal spread (95%)",1],v_spread:["Vertical spread (std)",1],
+ res_rms:["Residual RMS",1],res_max:["Residual max (mean per epoch)",1],mean_h:["Mean height",0]};  // [label, lower-is-better]
+const $=id=>document.getElementById(id), css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const masks=[...new Set(R.rows.map(r=>r.mask_deg))].sort((a,b)=>a-b);
+const ss=[...new Set(R.rows.filter(r=>r.estimator==="LQLC").map(r=>r.s))].sort((a,b)=>a-b);
+const get=(m,s)=>R.rows.find(r=>r.mask_deg===m&&(s===null?r.estimator==="LS":r.estimator==="LQLC"&&r.s===s));
+const MC=["--s1","--s2","--s3","--s4"];                       // mask colour follows the mask, never its rank
+const f2=v=>v.toFixed(2), pct=(a,b)=>((a-b)/b*100);
+
+$("run").textContent=R.run;
+$("meta").textContent=`${R.systems.map(s=>SYS[s]||s).join(" + ")} · ${R.epochs} epochs · ${masks.length} masks × ${ss.length} s values + LS per mask`;
+for(const k in MET)$("metric").add(new Option(MET[k][0],k));
+masks.forEach(m=>$("mask").add(new Option(m+"°",m)));
+ss.forEach(s=>$("s").add(new Option(s+" m",s)));
+$("mask").value=masks.includes(10)?10:masks[0]; $("s").value=ss.includes(3)?3:ss[0];
+["metric","mask","s"].forEach(id=>$(id).onchange=draw);
+
+// ---------- line chart (SVG, crosshair + tooltip) ----------
+function lineChart(box,{xs,xfmt,xlabel,series}){
+ const W=560,H=300,P={l:46,r:84,t:12,b:42},iw=W-P.l-P.r,ih=H-P.t-P.b;
+ const vals=series.flatMap(s=>s.vals.filter(v=>v!=null));
+ let lo=Math.min(...vals),hi=Math.max(...vals),pad=(hi-lo)*.12||.5;lo-=pad;hi+=pad;
+ const step=nice((hi-lo)/4),t0=Math.ceil(lo/step)*step,ticks=[];for(let t=t0;t<=hi+1e-9;t+=step)ticks.push(t);
+ const x=i=>P.l+(xs.length===1?iw/2:i*iw/(xs.length-1)), y=v=>P.t+(hi-v)/(hi-lo)*ih;
+ let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${xlabel} chart">`;
+ ticks.forEach(t=>g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${y(t)}" y2="${y(t)}" stroke="var(--grid)"/><text x="${P.l-8}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${+t.toFixed(2)}</text>`);
+ xs.forEach((v,i)=>g+=`<text x="${x(i)}" y="${H-P.b+18}" text-anchor="middle" font-size="11" fill="var(--muted)">${xfmt(v)}</text>`);
+ g+=`<text x="${P.l+iw/2}" y="${H-6}" text-anchor="middle" font-size="12" fill="var(--ink2)">${xlabel}</text>`;
+ g+=`<line class="xh" x1="0" x2="0" y1="${P.t}" y2="${P.t+ih}" stroke="var(--muted)" stroke-dasharray="3 3" visibility="hidden"/>`;
+ const ends=[];
+ series.forEach(s=>{
+  const pts=s.vals.map((v,i)=>v==null?null:[x(i),y(v)]).filter(Boolean);
+  g+=`<path d="M${pts.map(p=>p.join(",")).join("L")}" fill="none" stroke="var(${s.color})" stroke-width="${s.bold?2.5:1.6}" stroke-opacity="${s.faded?.35:1}" ${s.dash?'stroke-dasharray="6 4"':""} stroke-linejoin="round" stroke-linecap="round"/>`;
+  if(!s.dash)pts.forEach(p=>g+=`<circle cx="${p[0]}" cy="${p[1]}" r="${s.bold?4.5:3.5}" fill="var(${s.color})" fill-opacity="${s.faded?.35:1}" stroke="var(--card)" stroke-width="2"/>`);
+  const last=pts[pts.length-1];ends.push({y:last[1],x:last[0],s});
+ });
+ ends.sort((a,b)=>a.y-b.y);for(let i=1;i<ends.length;i++)ends[i].y=Math.max(ends[i].y,ends[i-1].y+13);   // keep labels apart
+ ends.forEach(e=>g+=`<text x="${e.x+10}" y="${e.y+4}" font-size="11" fill="var(--ink2)" font-weight="${e.s.bold?600:400}">${e.s.name}</text>`);
+ xs.forEach((v,i)=>{const w=iw/Math.max(xs.length-1,1);g+=`<rect data-i="${i}" x="${x(i)-w/2}" y="${P.t}" width="${w}" height="${ih}" fill="transparent"/>`});
+ g+="</svg>";box.innerHTML=g;
+ const svg=box.firstChild,tip=box.parentNode.querySelector(".tip"),xh=svg.querySelector(".xh");
+ svg.querySelectorAll("rect[data-i]").forEach(r=>{
+  r.onmousemove=ev=>{const i=+r.dataset.i;xh.setAttribute("x1",x(i));xh.setAttribute("x2",x(i));xh.setAttribute("visibility","visible");
+   tip.innerHTML=`<b>${xlabel}: ${xfmt(xs[i])}</b><br>`+series.filter(s=>s.vals[i]!=null).sort((a,b)=>b.vals[i]-a.vals[i])
+    .map(s=>`<span class="sw" style="background:var(${s.color})"></span>${s.name}: <b>${f2(s.vals[i])} m</b>`).join("<br>");
+   const b=box.parentNode.getBoundingClientRect();tip.style.display="block";
+   let lx=ev.clientX-b.left+14;if(lx+tip.offsetWidth>b.width)lx=ev.clientX-b.left-tip.offsetWidth-14;
+   tip.style.left=lx+"px";tip.style.top=(ev.clientY-b.top+10)+"px"};
+  r.onmouseleave=()=>{tip.style.display="none";xh.setAttribute("visibility","hidden")};
+ });
+}
+function nice(x){const e=10**Math.floor(Math.log10(x)),f=x/e;return (f<1.5?1:f<3?2:f<7?5:10)*e}
+function legend(el,items){el.innerHTML=items.map(i=>`<span><i class="${i.dash?"dash":""}" style="background:var(${i.color})"></i>${i.name}</span>`).join("")}
+
+// ---------- draw everything ----------
+function draw(){
+ const k=$("metric").value,m=+$("mask").value,s=+$("s").value,[lab,low]=MET[k];
+ const cur=get(m,s),ls=get(m,null);
+
+ // summary sentences
+ const lq=R.rows.filter(r=>r.estimator==="LQLC");
+ const best=low?lq.reduce((a,b)=>b[k]<a[k]?b:a):null;
+ const acrossS=ss.map(v=>get(m,v)[k]),acrossM=masks.map(v=>get(v,s)[k]);
+ const rng=a=>`${f2(Math.min(...a))}–${f2(Math.max(...a))} m (range ${f2(Math.max(...a)-Math.min(...a))} m)`;
+ $("summary").innerHTML=
+  (best?`<p><b>Best LQLC for ${lab.toLowerCase()}:</b> mask ${best.mask_deg}°, s = ${best.s} m → <b>${f2(best[k])} m</b>, `+
+   `${Math.abs(pct(best[k],get(best.mask_deg,null)[k])).toFixed(0)}% ${best[k]<get(best.mask_deg,null)[k]?"below":"above"} LS at the same mask.</p>`
+   :`<p><b>${lab}</b> is a position shift, not a quality score: no "best" value without a surveyed reference.</p>`)+
+  `<p><b>Effect of s</b> (mask ${m}°): ${rng(acrossS)}.</p><p><b>Effect of mask</b> (s = ${s} m): ${rng(acrossM)}.</p>`;
+
+ // tiles: selected config vs LS at same mask
+ $("tiles").innerHTML=Object.keys(MET).map(key=>{const a=cur[key],b=ls[key];
+  const d=key==="mean_h"?`${a-b>=0?"+":""}${f2(a-b)} m vs LS`:`${pct(a,b)>=0?"+":""}${pct(a,b).toFixed(0)}% vs LS (${f2(b)})`;
+  return `<div class="tile ${key===k?"on":""}"><div class="k">${MET[key][0]}</div><div class="v">${f2(a)} m</div><div class="d">${d}</div></div>`}).join("");
+
+ // chart A: metric vs s, one line per mask; LS of selected mask dashed
+ $("tA").textContent=`Effect of s on ${lab.toLowerCase()}`;
+ $("sA").textContent=`One line per elevation mask (selected: ${m}°). Dashed = LS at ${m}°, which does not depend on s.`;
+ const serA=masks.map((mm,i)=>({name:mm+"°",color:MC[i%4],vals:ss.map(v=>get(mm,v)[k]),bold:mm===m,faded:mm!==m}));
+ serA.push({name:`LS ${m}°`,color:"--ls",vals:ss.map(()=>ls[k]),dash:1});
+ legend($("lA"),serA);
+ lineChart($("cA"),{xs:ss,xfmt:v=>v+" m",xlabel:"LQLC scale s",series:serA});
+
+ // chart B: metric vs mask at selected s, LQLC vs LS
+ $("tB").textContent=`Effect of mask on ${lab.toLowerCase()}`;
+ $("sB").textContent=`LQLC at s = ${s} m compared with LS, across elevation masks.`;
+ const serB=[{name:`LQLC s=${s}`,color:"--s1",vals:masks.map(mm=>get(mm,s)[k]),bold:1},
+             {name:"LS",color:"--ls",vals:masks.map(mm=>get(mm,null)[k]),dash:1}];
+ legend($("lB"),serB);
+ lineChart($("cB"),{xs:masks,xfmt:v=>v+"°",xlabel:"Elevation mask",series:serB});
+
+ // heatmap
+ $("tH").textContent=`All combinations: ${lab.toLowerCase()} (m)`;
+ const all=R.rows.map(r=>r[k]),mn=Math.min(...all),mx=Math.max(...all),q=v=>1+Math.min(6,Math.floor((v-mn)/(mx-mn||1)*7));
+ let h=`<tr><th>mask \\ s</th><th>LS</th>${ss.map(v=>`<th>${v} m</th>`).join("")}</tr>`;
+ masks.forEach(mm=>{h+=`<tr><th>${mm}°</th><td class="ls" data-m="${mm}" title="LS, mask ${mm}°: ${f2(get(mm,null)[k])} m">${f2(get(mm,null)[k])}</td>`;
+  ss.forEach(v=>{const r=get(mm,v),isB=best&&r===best;
+   h+=`<td class="q${q(r[k])} ${mm===m&&v===s?"sel":""}" data-m="${mm}" data-s="${v}" title="LQLC, mask ${mm}°, s = ${v} m: ${f2(r[k])} m">${f2(r[k])}${isB?'<span class="star" aria-label="best">★</span>':""}</td>`});
+  h+="</tr>"});
+ $("heat").innerHTML=h;
+ $("heat").querySelectorAll("td[data-s]").forEach(td=>td.onclick=()=>{$("mask").value=td.dataset.m;$("s").value=td.dataset.s;draw()});
+ $("scale").innerHTML=`${f2(mn)} m `+[1,2,3,4,5,6,7].map(i=>`<b class="q${i}"></b>`).join("")+` ${f2(mx)} m`;
+}
+draw();
+</script></main></body></html>

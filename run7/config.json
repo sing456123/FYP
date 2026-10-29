@@ -1,0 +1,135 @@
+{
+ "LS": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LS",
+  "s": 5.0,
+  "snr_rule": "off",
+  "jump_db": 2.0,
+  "low_snr": 0.0,
+  "gate_el": 30.0,
+  "down_w": 0.1
+ },
+ "LS_jumpveto": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LS",
+  "s": 5.0,
+  "snr_rule": "veto",
+  "jump_db": 2.0,
+  "low_snr": 0.0,
+  "gate_el": 30.0,
+  "down_w": 0.1
+ },
+ "LQLC": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "snr_rule": "off",
+  "jump_db": 2.0,
+  "low_snr": 0.0,
+  "gate_el": 30.0,
+  "down_w": 0.1
+ },
+ "LQLC_jumpveto": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "snr_rule": "veto",
+  "jump_db": 2.0,
+  "low_snr": 0.0,
+  "gate_el": 30.0,
+  "down_w": 0.1
+ },
+ "LQLC_jumpdown": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "snr_rule": "down",
+  "jump_db": 2.0,
+  "low_snr": 0.0,
+  "gate_el": 30.0,
+  "down_w": 0.1
+ },
+ "LQLC_lowsnrveto": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "snr_rule": "veto",
+  "jump_db": 0.0,
+  "low_snr": 30.0,
+  "gate_el": 30.0,
+  "down_w": 0.1
+ },
+ "LQLC_bothveto": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "snr_rule": "veto",
+  "jump_db": 2.0,
+  "low_snr": 30.0,
+  "gate_el": 30.0,
+  "down_w": 0.1
+ }
+}

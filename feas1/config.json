@@ -1,0 +1,19 @@
+{
+ "cfg": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0
+ },
+ "BAD": 10.0,
+ "FLAG": 0.1,
+ "HIST": 30
+}

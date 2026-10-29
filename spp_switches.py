@@ -37,9 +37,9 @@ BASE = dict(
     tropo=False,         # keep False: already in cor_pseudo (Saastamoinen, only for raw_pseudo)
     iono=False,          # keep False: already in cor_pseudo (Klobuchar, only for raw_pseudo)
     systems=[1,4,8,32],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
-    mask_deg=10.0,       # elevation mask (deg)
+    mask_deg=5.0,       # elevation mask (deg)
     estimator="LS",      # 'LS' | 'LQLC'
-    s=3.0,               # LQLC scale (m)
+    s=5.0,               # LQLC scale (m)
 )
 CONFIGS = {             # name: changes from BASE
     "LS":   dict(estimator="LS"),
