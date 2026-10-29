@@ -1,0 +1,114 @@
+{
+ "LS": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LS",
+  "s": 5.0,
+  "sig_w": false,
+  "sig_s": false
+ },
+ "WLS_rtk": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LS",
+  "s": 5.0,
+  "sig_w": true,
+  "sig_s": false
+ },
+ "LQLC": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "sig_w": false,
+  "sig_s": false
+ },
+ "LQLC_sig": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "sig_w": false,
+  "sig_s": true
+ },
+ "LQLC_sig_w": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "sig_w": true,
+  "sig_s": true
+ },
+ "LQLC_sig_s3": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 3.0,
+  "sig_w": false,
+  "sig_s": true
+ },
+ "LQLC_sig_w_s3": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 3.0,
+  "sig_w": true,
+  "sig_s": true
+ }
+}
