@@ -1,5 +1,4 @@
 .venv
-*.nosync/
 .DS_Store
 __pycache__/
 # data, kept outside git
