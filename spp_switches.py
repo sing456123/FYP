@@ -1,13 +1,11 @@
 """
 SPP: LS vs LQLC on cor_pseudo
 =============================
-Input pseudorange: cor_pseudo. Confirmed by the supervisor: the receiver already corrected it
-for iono, tropo and Sagnac (and the satellite clock). So every run is just LS vs LQLC; vary
-systems / mask_deg / s in BASE between runs.
-
-The sagnac / tropo / iono switches stay OFF: on cor_pseudo they would apply the correction
-twice (seen in testing: Sagnac moved the fix ~32 m E-W, tropo + iono dropped height ~19 m).
-They are kept only for a future raw_pseudo path.
+Input pseudorange: cor_pseudo (satellite clock already corrected by the receiver).
+Always applied on top: Sagnac (Earth rotation), Saastamoinen tropo, Klobuchar iono (default coefficients).
+Checked against the supervisor's true coordinate (REF_LLA, run12): without them the fix sits ~36 m
+East and ~27 m above the truth; with them ~4 m horizontal error and ~11 m height bias.
+Vary systems / mask_deg / estimator / s in BASE and CONFIGS between runs.
 
 Flow per epoch:
   every iteration: from current theta_n -> el, az -> sagnac, tropo, iono, mask
@@ -33,19 +31,17 @@ ION_DEFAULT = [0.1118e-07, -0.7451e-08, -0.5961e-07, 0.1192e-06,  # alpha  (RTKL
 
 # ============================== SWITCHES ==============================
 BASE = dict(
-    sagnac=False,        # keep False: already in cor_pseudo (only for raw_pseudo)
-    tropo=False,         # keep False: already in cor_pseudo (Saastamoinen, only for raw_pseudo)
-    iono=False,          # keep False: already in cor_pseudo (Klobuchar, only for raw_pseudo)
     systems=[1,4,8,32],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
-    mask_deg=5.0,       # elevation mask (deg)
+    mask_deg=10.0,       # elevation mask (deg)
     estimator="LS",      # 'LS' | 'LQLC'
-    s=5.0,               # LQLC scale (m)
+    s=1.0,               # LQLC scale (m)
 )
 CONFIGS = {             # name: changes from BASE
     "LS":   dict(estimator="LS"),
     "LQLC": dict(estimator="LQLC"),
 }
-REF_XYZ = None    # put surveyed antenna ECEF (m) here, e.g. np.array([x, y, z]); None = no truth
+REF_LLA = (22.313095, 114.19142326, 3.0)    # true antenna position from the supervisor: (lat deg, lon deg, ellipsoidal h m); None = no truth
+REF_XYZ = None    # ...or the same as ECEF (m), np.array([x, y, z]); REF_LLA wins if both are set
 MAX_ITER, TOL = 30, 1e-3
 # ======================================================================
 
@@ -60,6 +56,17 @@ def ecef_to_lla(p):
         h = r / np.cos(lat) - N
         lat = np.arctan2(z, r * (1 - e2 * N / (N + h)))
     return lat, lon, h
+
+
+def lla_to_ecef(lat_deg, lon_deg, h):
+    a, e2 = 6378137.0, 6.69437999014e-3
+    lat, lon = np.radians(lat_deg), np.radians(lon_deg)
+    N = a / np.sqrt(1 - e2 * np.sin(lat) ** 2)
+    return np.array([(N + h) * np.cos(lat) * np.cos(lon), (N + h) * np.cos(lat) * np.sin(lon), (N * (1 - e2) + h) * np.sin(lat)])
+
+
+def ref_xyz():
+    return lla_to_ecef(*REF_LLA) if REF_LLA is not None else REF_XYZ
 
 
 def enu_matrix(lat, lon):
@@ -119,10 +126,8 @@ def iter_terms(sat_xyz, sysid, tow, theta, cfg, have_pos):
         return np.zeros(n), np.ones(n, bool)
     rx = theta[:3]
     el, az = el_az(sat_xyz, rx)
-    corr = np.zeros(n)
-    if cfg["sagnac"]: corr += sagnac(sat_xyz, rx)
-    if cfg["tropo"]:  corr += tropo_saastamoinen(el, rx)
-    if cfg["iono"]:   corr += iono_klobuchar(el, az, rx, tow) * (FREQ[1] / np.vectorize(FREQ.get)(sysid)) ** 2
+    corr = (sagnac(sat_xyz, rx) + tropo_saastamoinen(el, rx)
+            + iono_klobuchar(el, az, rx, tow) * (FREQ[1] / np.vectorize(FREQ.get)(sysid)) ** 2)
     keep = el >= np.radians(cfg["mask_deg"])
     return corr, keep
 
@@ -226,7 +231,7 @@ if __name__ == "__main__":
     rows = []
     for name, cfg in configs.items():
         df = run(cfg, data)
-        rows.append(dict(config=name, **score(df, REF_XYZ)))
+        rows.append(dict(config=name, **score(df, ref_xyz())))
         df.to_csv(out / f"out_{name}.csv", index=False)
         print("done:", name)
     T = pd.DataFrame(rows)

@@ -1,0 +1,30 @@
+{
+ "LS": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LS",
+  "s": 5.0
+ },
+ "LQLC": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5.0,
+  "estimator": "LQLC",
+  "s": 5.0
+ }
+}

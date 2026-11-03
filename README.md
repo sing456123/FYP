@@ -19,8 +19,8 @@ you change the satellites, elevation mask or LQLC scale in `BASE`.
 | `spp_switches.py` | **Main solver.** LS vs LQLC per epoch on `cor_pseudo`; settings in `BASE` | `run<N>/` |
 | `sweep.py` | Imports `spp_switches` and runs every elevation mask × LQLC `s` combination in parallel | `run<N>/` + `sweep.txt` |
 | `feasibility.py` | Imports `spp_switches`, records every satellite's SNR next to its residual, and tests whether SNR predicts bad ranges (MOMENT step 1) | `feas<N>/` |
+| `mat2csv.py` | Converts a `sppStruct` `.mat` file to the CSV layout above: `python mat2csv.py "<file>.mat" <name>.csv` | `.csv` |
 | `spp_snrgate.py` | Copy of `spp_switches` with a causal SNR gate (veto / down-weight suspects): does the gate beat LQLC alone? (MOMENT step 2) | `run<N>/` |
-| `spp_sigma.py` | Copy of `spp_switches` with RTKLIB's elevation/system noise model σᵢ, as a prior weight 1/σᵢ² and/or a per-satellite `s` | `run<N>/` |
 | `build_viewer.py` | Map viewer for a run (called automatically) | `run<N>/viewer.html` |
 | `build_sweep.py` | Summary page for a sweep: dropdowns, charts, heatmap (called automatically) | `run<N>/sweep.html` |
 | `templates/` | The two HTML templates the builders fill in | |
@@ -39,7 +39,7 @@ you change the satellites, elevation mask or LQLC scale in `BASE`.
 
 ## Findings: what we tried to enhance LQLC
 
-All tests: `cor_pseudo` (already corrected for clock, iono, tropo, Sagnac), 6693 epochs, Hong Kong urban
+All tests: `cor_pseudo` with **no** Sagnac/tropo/iono (we then believed it already had them), 6693 epochs, Hong Kong urban
 canyon. Numbers are **spread around each config's own mean** (precision): horizontal RMS / vertical std, in metres.
 
 ```mermaid
@@ -101,11 +101,10 @@ flowchart LR
 Change **one** setting per run, so any difference between runs can be traced to it. Each run's `config.json`
 records what was used.
 
-> **`cor_pseudo` is already corrected.** The supervisor confirmed that the receiver applied ionosphere,
-> troposphere and Sagnac (and the satellite clock) to `cor_pseudo`. So the `sagnac`, `tropo` and `iono`
-> switches stay **off**: switching them on applies a correction twice. Testing showed exactly that: Sagnac moved
-> the fix about 32 m east–west off the antenna site, and tropo + iono lowered the height by about 19 m.
-> The correction functions are kept for a possible future `raw_pseudo` path.
+> **Sagnac, tropo and iono are always applied.** `cor_pseudo` only has the satellite clock corrected. Against the
+> supervisor's true coordinate (`REF_LLA`, run12), without them the fix sits ~36 m East and ~27 m too high; with
+> them the horizontal error is ~4 m and the height bias ~11 m. Precision (spread) barely changes, which is why
+> the earlier spread-only tests did not notice. Runs before run12 were made without them.
 
 ---
 
@@ -218,11 +217,10 @@ flowchart TB
 | `mask_deg` | degrees | Satellites below this elevation get weight 0 |
 | `s` | metres | LQLC scale. Larger values behave more like LS |
 | `estimator` | `LS` / `LQLC` | Set by `CONFIGS`: every run solves both |
-| `sagnac` | bool | **Keep `False`**: already in `cor_pseudo` (only for raw pseudoranges) |
-| `tropo` | bool | **Keep `False`**: already in `cor_pseudo` (only for raw pseudoranges) |
-| `iono` | bool | **Keep `False`**: already in `cor_pseudo` (only for raw pseudoranges) |
 
-Other settings: `REF_XYZ` (surveyed antenna ECEF, enables true-error scoring), `MAX_ITER`, `TOL`.
+Sagnac, tropo and iono have no switch: they are always on.
+
+Other settings: `REF_LLA` (true antenna lat, lon, h; enables true-error scoring; set it to `None` or the right site for another dataset), `REF_XYZ` (same as ECEF), `MAX_ITER`, `TOL`.
 
 ---
 
@@ -299,7 +297,7 @@ $$
 $w \to 1$ for small residuals and $w \approx 2s/\lvert r\rvert$ for large ones. The constant $1/(4s^2)$ cancels in
 the normal equations.
 
-### 7.5 Sagnac (switch, off: already in `cor_pseudo`)
+### 7.5 Sagnac (always on)
 
 While the signal travels for about 70 ms, the Earth rotates under it:
 
@@ -308,7 +306,7 @@ S_i = \frac{\omega_e}{c}\left(x^{s}_i\,y_r - y^{s}_i\,x_r\right),
 \qquad \omega_e = 7.2921151467\times10^{-5}\ \text{rad/s}
 $$
 
-### 7.6 Troposphere: Saastamoinen (switch, off: already in `cor_pseudo`)
+### 7.6 Troposphere: Saastamoinen (always on)
 
 $$
 \begin{aligned}
@@ -321,7 +319,7 @@ T_i &= \frac{\text{ZHD} + \text{ZWD}}{\sin(\max(el_i,\ 1^\circ))}
 \end{aligned}
 $$
 
-### 7.7 Ionosphere: Klobuchar (switch, off: already in `cor_pseudo`)
+### 7.7 Ionosphere: Klobuchar (always on)
 
 ```mermaid
 flowchart LR

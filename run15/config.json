@@ -1,0 +1,114 @@
+{
+ "LS": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LS",
+  "s": 1.0
+ },
+ "LQLC": {
+  "sagnac": false,
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0
+ },
+ "LS_sagnac": {
+  "sagnac": "range",
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LS",
+  "s": 1.0
+ },
+ "LQLC_sagnac": {
+  "sagnac": "range",
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0
+ },
+ "LQLC_rotate": {
+  "sagnac": "rotate",
+  "tropo": false,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0
+ },
+ "LQLC_sag_tropo": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": false,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0
+ },
+ "LS_sag_tropo_iono": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LS",
+  "s": 1.0
+ },
+ "LQLC_sag_tropo_iono": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0
+ }
+}

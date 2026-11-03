@@ -1,0 +1,338 @@
+{
+ "LS_m5": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5,
+  "estimator": "LS",
+  "s": 5.0
+ },
+ "LQLC_m5_s1": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5,
+  "estimator": "LQLC",
+  "s": 1
+ },
+ "LQLC_m5_s2": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5,
+  "estimator": "LQLC",
+  "s": 2
+ },
+ "LQLC_m5_s3": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5,
+  "estimator": "LQLC",
+  "s": 3
+ },
+ "LQLC_m5_s5": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5,
+  "estimator": "LQLC",
+  "s": 5
+ },
+ "LQLC_m5_s10": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 5,
+  "estimator": "LQLC",
+  "s": 10
+ },
+ "LS_m10": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10,
+  "estimator": "LS",
+  "s": 5.0
+ },
+ "LQLC_m10_s1": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10,
+  "estimator": "LQLC",
+  "s": 1
+ },
+ "LQLC_m10_s2": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10,
+  "estimator": "LQLC",
+  "s": 2
+ },
+ "LQLC_m10_s3": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10,
+  "estimator": "LQLC",
+  "s": 3
+ },
+ "LQLC_m10_s5": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10,
+  "estimator": "LQLC",
+  "s": 5
+ },
+ "LQLC_m10_s10": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10,
+  "estimator": "LQLC",
+  "s": 10
+ },
+ "LS_m15": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 15,
+  "estimator": "LS",
+  "s": 5.0
+ },
+ "LQLC_m15_s1": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 15,
+  "estimator": "LQLC",
+  "s": 1
+ },
+ "LQLC_m15_s2": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 15,
+  "estimator": "LQLC",
+  "s": 2
+ },
+ "LQLC_m15_s3": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 15,
+  "estimator": "LQLC",
+  "s": 3
+ },
+ "LQLC_m15_s5": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 15,
+  "estimator": "LQLC",
+  "s": 5
+ },
+ "LQLC_m15_s10": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 15,
+  "estimator": "LQLC",
+  "s": 10
+ },
+ "LS_m20": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 20,
+  "estimator": "LS",
+  "s": 5.0
+ },
+ "LQLC_m20_s1": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 20,
+  "estimator": "LQLC",
+  "s": 1
+ },
+ "LQLC_m20_s2": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 20,
+  "estimator": "LQLC",
+  "s": 2
+ },
+ "LQLC_m20_s3": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 20,
+  "estimator": "LQLC",
+  "s": 3
+ },
+ "LQLC_m20_s5": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 20,
+  "estimator": "LQLC",
+  "s": 5
+ },
+ "LQLC_m20_s10": {
+  "sagnac": "range",
+  "tropo": true,
+  "iono": true,
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 20,
+  "estimator": "LQLC",
+  "s": 10
+ }
+}

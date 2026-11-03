@@ -1,6 +1,6 @@
 """
 Sweep elevation mask x LQLC scale s, using spp_switches.py as a library (it is not modified).
-Everything else (systems, corrections) comes from spp_switches.BASE.
+Everything else (systems; corrections are always on) comes from spp_switches.BASE.
 LS does not depend on s, so it runs once per mask. Configs run in parallel.
 
 Usage:  python sweep.py data.csv      -> next free run<N>/ with comparison.csv, sweep.txt, sweep.html, out_*.csv

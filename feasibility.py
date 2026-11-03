@@ -23,7 +23,6 @@ HIST = 30         # epochs of history for the "sudden change" indicator
 
 def per_satellite(data, cfg):
     """Same epoch loop as spp.run(), but keeps every used satellite's residual and weight."""
-    assert not (cfg["sagnac"] or cfg["tropo"] or cfg["iono"]), "residuals below assume no extra corrections"
     d = data[data.sat_const.isin(cfg["systems"])]
     theta, recs = np.zeros(3), []
     for ep, g in d.groupby("epoch"):
@@ -34,9 +33,9 @@ def per_satellite(data, cfg):
         sysid = g.sat_const.values
         systems = [s for s in cfg["systems"] if (sysid == s).any()]
         sat = g[["sat_x", "sat_y", "sat_z"]].values
-        res = g.cor_pseudo.values - (np.linalg.norm(sat - th[:3], axis=1) + th[[3 + systems.index(s) for s in sysid]])
+        corr, k = spp.iter_terms(sat, sysid, float(g.tow.iloc[0]), th, cfg, True)
+        res = g.cor_pseudo.values - (np.linalg.norm(sat - th[:3], axis=1) + th[[3 + systems.index(s) for s in sysid]] + corr)
         el, _ = spp.el_az(sat, th[:3])
-        k = el >= np.radians(cfg["mask_deg"])
         recs.append(pd.DataFrame(dict(epoch=ep, sys=sysid[k], prn=g.sat_id.values[k], el=np.degrees(el[k]),
                                       snr=g.sat_snr.values[k], res=res[k], w=spp.lqlc_weight(res[k], cfg["s"]))))
     return pd.concat(recs, ignore_index=True)
