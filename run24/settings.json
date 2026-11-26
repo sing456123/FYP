@@ -1,0 +1,108 @@
+{
+ "data": "data_midurban.csv",
+ "ref": null,
+ "S_MIN": 0.3,
+ "configs": {
+  "LS": {
+   "systems": [
+    1,
+    4,
+    8,
+    32
+   ],
+   "mask_deg": 10.0,
+   "estimator": "LS",
+   "s": 1.0,
+   "k": null
+  },
+  "LQLC_s1": {
+   "systems": [
+    1,
+    4,
+    8,
+    32
+   ],
+   "mask_deg": 10.0,
+   "estimator": "LQLC",
+   "s": 1.0,
+   "k": null
+  },
+  "LQLC_s5": {
+   "systems": [
+    1,
+    4,
+    8,
+    32
+   ],
+   "mask_deg": 10.0,
+   "estimator": "LQLC",
+   "s": 5.0,
+   "k": null
+  },
+  "LQLC_aditer_k0.5": {
+   "systems": [
+    1,
+    4,
+    8,
+    32
+   ],
+   "mask_deg": 10.0,
+   "estimator": "LQLC",
+   "s": 1.0,
+   "k": 0.5,
+   "s_mode": "iter"
+  },
+  "LQLC_aditer_k1": {
+   "systems": [
+    1,
+    4,
+    8,
+    32
+   ],
+   "mask_deg": 10.0,
+   "estimator": "LQLC",
+   "s": 1.0,
+   "k": 1,
+   "s_mode": "iter"
+  },
+  "LQLC_aditer_k1.5": {
+   "systems": [
+    1,
+    4,
+    8,
+    32
+   ],
+   "mask_deg": 10.0,
+   "estimator": "LQLC",
+   "s": 1.0,
+   "k": 1.5,
+   "s_mode": "iter"
+  },
+  "LQLC_aditer_k2": {
+   "systems": [
+    1,
+    4,
+    8,
+    32
+   ],
+   "mask_deg": 10.0,
+   "estimator": "LQLC",
+   "s": 1.0,
+   "k": 2,
+   "s_mode": "iter"
+  },
+  "LQLC_aditer_k3": {
+   "systems": [
+    1,
+    4,
+    8,
+    32
+   ],
+   "mask_deg": 10.0,
+   "estimator": "LQLC",
+   "s": 1.0,
+   "k": 3,
+   "s_mode": "iter"
+  }
+ }
+}

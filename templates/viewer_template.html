@@ -20,24 +20,30 @@ input[type=number]{width:95px} h4{margin:10px 0 4px}
  <label><input type="checkbox" id="tracks"> show tracks</label>
  <h4>ENU scatter (m) · range ±<input id="rng" type="number" value="15" style="width:50px"></h4>
  <canvas id="cv" width="420" height="420"></canvas>
+ <h4>Error per epoch vs <span class="refname"></span> · <select id="comp"><option value="h">horizontal</option><option value="v">vertical |dU|</option></select>
+  · y max <input id="ymax" type="number" style="width:50px" placeholder="auto"> m</h4>
+ <canvas id="ts" width="420" height="230"></canvas>
+ <h4>% of epochs within error (CDF) vs <span class="refname"></span></h4>
+ <canvas id="cdf" width="420" height="230"></canvas>
+ <div id="refnote" style="font-size:11px"></div>
  <h4>Current epoch</h4><table id="cur"></table>
- <h4>Stats vs reference (all epochs, converged only)</h4><table id="stats"></table>
+ <h4>Stats vs <span class="refname"></span> (all epochs, converged only)</h4><table id="stats"></table>
  <h4>Spread around own mean &amp; residuals (for reference)</h4><table id="spread"></table>
  <div style="color:#666;font-size:11px">spread: H rms / H95 / V std of each config's fixes around its own mean ·
  res: post-fit pseudorange residuals of the used satellites, RMS and max |res| averaged over epochs (m)</div>
 </div>
 <script>
-const D=__DATA__, N=D[0].lat.length, COL=["#999","#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#a65628","#f781bf"];
+const D=__DATA__, TRUE=__REF__, N=D[0].lat.length, COL=["#999","#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00","#a65628","#f781bf"];
 const on=D.map(()=>true), $=id=>document.getElementById(id);
 const rad=Math.PI/180, A=6378137, E2=6.69437999014e-3;
-let ref; // {lat,lon,h}
+let ref, refName=""; // {lat,lon,h}
 const med=a=>{const s=[...a].sort((x,y)=>x-y);return s[s.length>>1]};
 function enu(c,i){ // small-area ENU about ref
   const s=Math.sin(ref.lat*rad), W=Math.sqrt(1-E2*s*s), M=A*(1-E2)/W**3, Nn=A/W;
   return [(c.lon[i]-ref.lon)*rad*(Nn+ref.h)*Math.cos(ref.lat*rad),(c.lat[i]-ref.lat)*rad*(M+ref.h),c.h[i]-ref.h];
 }
 function setRef(r){ref=r;$("rlat").value=r.lat.toFixed(8);$("rlon").value=r.lon.toFixed(8);$("rh").value=r.h.toFixed(3);
-  refM.setLatLng([r.lat,r.lon]);stats();draw()}
+  refM.setLatLng([r.lat,r.lon]);stats();draw();errPlots()}
 // map
 const map=L.map("map").setView([22.313,114.192],19);
 const osm=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:20,maxNativeZoom:19}).addTo(map);
@@ -50,11 +56,15 @@ const tr=D.map((c,i)=>L.polyline(c.lat.map((v,k)=>[v,c.lon[k]]),{color:COL[i],we
 D.forEach((c,i)=>{$("legend").insertAdjacentHTML("beforeend",
  `<label style="color:${COL[i]}"><input type="checkbox" data-i="${i}" ${on[i]?"checked":""}> ${c.name}</label><br>`);
  $("refsel").add(new Option("median of "+c.name,i))});
-$("refsel").value=D.length-1;
-$("legend").onchange=e=>{on[e.target.dataset.i]=e.target.checked;show()};
+if(TRUE)$("refsel").add(new Option("TRUE position (surveyed)","true"));
+$("refsel").value=TRUE?"true":D.length-1;
+$("legend").onchange=e=>{on[e.target.dataset.i]=e.target.checked;show();errPlots()};
 $("tracks").onchange=show;
-$("refsel").onchange=()=>{const c=D[$("refsel").value];setRef({lat:med(c.lat),lon:med(c.lon),h:med(c.h)})};
-$("setref").onclick=()=>setRef({lat:+$("rlat").value,lon:+$("rlon").value,h:+$("rh").value});
+$("refsel").onchange=()=>{const v=$("refsel").value;
+  if(v==="true"){refName="TRUE position";setRef(TRUE);return}
+  const c=D[v];refName="median of "+c.name;setRef({lat:med(c.lat),lon:med(c.lon),h:med(c.h)})};
+$("setref").onclick=()=>{refName="manual point";setRef({lat:+$("rlat").value,lon:+$("rlon").value,h:+$("rh").value})};
+$("comp").onchange=errPlots;$("ymax").oninput=errPlots;
 $("rng").oninput=draw;
 const sl=$("sl");sl.max=N-1;sl.oninput=show;
 let tm=null;$("play").onclick=()=>{if(tm){clearInterval(tm);tm=null;$("play").textContent="▶"}else{
@@ -78,6 +88,39 @@ function draw(){
     for(let j=0;j<N;j+=3){if(!c.conv[j])continue;const [e,n]=enu(c,j);g.fillRect(W/2+e*s-1,W/2-n*s-1,2,2)}
     const [e,n]=enu(c,k);g.fillStyle=COL[i];g.beginPath();g.arc(W/2+e*s,W/2-n*s,5,0,7);g.fill();g.strokeStyle="#000";g.stroke()});
 }
+function errs(c){ // error of each converged epoch vs ref: [epoch index, error m]
+  const out=[],v=$("comp").value==="v";
+  for(let j=0;j<N;j++){if(!c.conv[j])continue;const [e,n,u]=enu(c,j);out.push([j,v?Math.abs(u):Math.hypot(e,n)])}
+  return out}
+function axes(g,W,H,P,xmax,ymax,xlab,ylab,xfmt){
+  g.clearRect(0,0,W,H);g.strokeStyle="#ddd";g.fillStyle="#666";g.font="10px system-ui";
+  for(let k=0;k<=4;k++){const y=H-P-(H-2*P)*k/4;g.beginPath();g.moveTo(P,y);g.lineTo(W-6,y);g.stroke();g.fillText((ymax*k/4).toFixed(ymax<10?1:0),12,y+3)}
+  for(let k=0;k<=4;k++){const x=P+(W-P-6)*k/4;g.fillText(xfmt(xmax*k/4),x-8,H-P+12)}
+  g.fillText(xlab,W/2-30,H-2);g.save();g.translate(8,P+80);g.rotate(-Math.PI/2);g.fillText(ylab,0,0);g.restore()}
+function errPlots(){
+  if(!ref)return;
+  document.querySelectorAll(".refname").forEach(s=>s.textContent=refName);
+  $("refnote").innerHTML=refName==="TRUE position"?"<span style='color:#060'>Error = distance to the surveyed true position (accuracy).</span>":
+   "<b style='color:#b00'>Not true error:</b> distance to "+refName+" (precision only)"+(TRUE?"":" — this dataset has no true position.");
+  const E=D.map(c=>errs(c)), lab=$("comp").value==="v"?"vertical error (m)":"horizontal error (m)";
+  let ymax=+$("ymax").value;
+  if(!ymax){const all=[];E.forEach((a,i)=>{if(on[i])a.forEach(p=>all.push(p[1]))});all.sort((a,b)=>a-b);
+    ymax=Math.max(1,Math.ceil(all[Math.floor(all.length*.98)]||1))}
+  // per-epoch time series
+  let cv=$("ts"),g=cv.getContext("2d"),W=cv.width,H=cv.height,P=34;
+  axes(g,W,H,P,N-1,ymax,"epoch",lab,v=>v.toFixed(0));
+  const X=j=>P+(W-P-6)*j/(N-1),Y=v=>H-P-(H-2*P)*Math.min(v,ymax)/ymax;
+  E.forEach((a,i)=>{if(!on[i])return;g.strokeStyle=COL[i];g.globalAlpha=.75;g.lineWidth=1;g.beginPath();
+    a.forEach(([j,v],k)=>k?g.lineTo(X(j),Y(v)):g.moveTo(X(j),Y(v)));g.stroke()});
+  g.globalAlpha=1;
+  // CDF: % of converged epochs with error <= x
+  cv=$("cdf");g=cv.getContext("2d");W=cv.width;H=cv.height;
+  axes(g,W,H,P,ymax,100,lab,"% of epochs",v=>v.toFixed(ymax<10?1:0));
+  const CX=v=>P+(W-P-6)*Math.min(v,ymax)/ymax,CY=p=>H-P-(H-2*P)*p/100;
+  g.strokeStyle="#bbb";g.setLineDash([3,3]);[50,95].forEach(p=>{g.beginPath();g.moveTo(P,CY(p));g.lineTo(W-6,CY(p));g.stroke()});g.setLineDash([]);
+  E.forEach((a,i)=>{if(!on[i])return;const s=a.map(p=>p[1]).sort((x,y)=>x-y);g.strokeStyle=COL[i];g.lineWidth=1.5;g.beginPath();
+    s.forEach((v,k)=>k?g.lineTo(CX(v),CY(100*(k+1)/s.length)):g.moveTo(CX(v),CY(100/s.length)));g.stroke()});
+  g.lineWidth=1}
 function stats(){
   let h="<tr><th>config<th>mean lat<th>mean lon<th>dE<th>dN<th>dU<th>H rms<th>H95<th>V rms";
   D.forEach((c,i)=>{let E=[],Nn=[],U=[],Hh=[];

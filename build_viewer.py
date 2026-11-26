@@ -1,8 +1,15 @@
-"""Build run<N>/viewer.html from the out_<config>.csv files listed in run<N>/comparison.csv (ECEF -> WGS-84 lat/lon/h). Stdlib only. Usage: python3 build_viewer.py [run<N>]  (default: newest run)"""
+"""Build run<N>/viewer.html from the out_<config>.csv files listed in run<N>/comparison.csv (ECEF -> WGS-84 lat/lon/h). Stdlib only. Usage: python3 build_viewer.py [run<N>] [lat,lon,h | none]  (default: newest run; true position from run<N>/settings.json)"""
 import csv, glob, json, math, os, sys
 
 RUNS = sorted((p for p in glob.glob("run*") if p[3:].isdigit()), key=lambda p: int(p[3:]))
 RUN = sys.argv[1] if len(sys.argv) > 1 else RUNS[-1]
+# true position: argv[2] "lat,lon,h" (or "none"), else settings.json "ref", else none (median references only)
+if len(sys.argv) > 2:
+    REF = None if sys.argv[2] == "none" else [float(v) for v in sys.argv[2].split(",")]
+elif os.path.exists(f"{RUN}/settings.json"):
+    REF = json.load(open(f"{RUN}/settings.json")).get("ref")
+else:
+    REF = None
 
 COMP = list(csv.DictReader(open(f"{RUN}/comparison.csv")))
 NAMES = [r["config"] for r in COMP]
@@ -29,6 +36,7 @@ for name, comp in zip(NAMES, COMP):
                      spread={k: round(float(comp[k]), 2)
                              for k in ("h_spread", "h95_spread", "v_spread", "res_rms", "res_max")}))
 
-html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "viewer_template.html")).read().replace("__DATA__", json.dumps(cfgs))
+html = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "viewer_template.html")).read().replace("__DATA__", json.dumps(cfgs)).replace(
+    "__REF__", json.dumps(dict(lat=REF[0], lon=REF[1], h=REF[2]) if REF else None))
 open(f"{RUN}/viewer.html", "w").write(html)
 print(f"{RUN}/viewer.html", len(html) // 1024, "KB")

@@ -31,10 +31,10 @@ ION_DEFAULT = [0.1118e-07, -0.7451e-08, -0.5961e-07, 0.1192e-06,  # alpha  (RTKL
 
 # ============================== SWITCHES ==============================
 BASE = dict(
-    systems=[1,4,8,32],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
+    systems=[1,8,32],         # [1]=GPS only (4 unknowns) | [1,4,8,32]=all (one clock per system)
     mask_deg=10.0,       # elevation mask (deg)
     estimator="LS",      # 'LS' | 'LQLC'
-    s=1.0,               # LQLC scale (m)
+    s=0.3,               # LQLC scale (m)
 )
 CONFIGS = {             # name: changes from BASE
     "LS":   dict(estimator="LS"),

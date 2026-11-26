@@ -1,133 +1,132 @@
-# SPP: LS vs LQLC
+# Robust GNSS Single Point Positioning with LQLC
 
-`spp_switches.py` computes the receiver position every epoch from GNSS pseudoranges (Single Point Positioning).
-It solves every epoch with both **LS** and **LQLC** on the receiver's `cor_pseudo` and compares them. Between runs
-you change the satellites, elevation mask or LQLC scale in `BASE`.
+**Final Year Project.** Every epoch, the receiver position is computed from multi-GNSS pseudoranges in Hong Kong
+urban canyons. The standard **least squares (LS)** estimator is compared with **LQLC**, a robust estimator built on
+a log-cosh cost. LQLC down-weights reflected (multipath / NLOS) signals instead of letting them pull the position.
 
-```bash
-.venv/bin/python spp_switches.py data.csv       # LS + LQLC → next free run<N>/ folder, viewer included
-.venv/bin/python spp_switches.py data.csv run1  # re-run run1/ from its own config.json (same settings)
-.venv/bin/python build_viewer.py run1           # rebuild the viewer for one run (newest if omitted)
+> **Bottom line:** LQLC roughly **halves** the position scatter of LS in a dense urban canyon. In a mid-urban
+> canyon it cuts the scatter by **about 10×**. Applying Earth-rotation, troposphere and ionosphere corrections
+> brings the horizontal error against the true position down from **36 m to about 4 m**.
+
+<p align="center">
+  <img src="figures/best_lqlc.png" width="900" alt="LQLC vs LS fixes around their median: LQLC (blue) is much tighter than LS (grey)">
+  <br><sub>Urban dataset, run8: every 2nd epoch of LQLC (blue) and LS (grey) around the median. Dashed circles contain 95% of the fixes.</sub>
+</p>
+
+---
+
+## Contents
+
+1. [Key results](#1-key-results)
+2. [How it works](#2-how-it-works)
+3. [What we tried](#3-what-we-tried)
+4. [Quick start](#4-quick-start)
+5. [Datasets](#5-datasets)
+6. [Project layout](#6-project-layout)
+7. [Settings](#7-settings)
+8. [Outputs and metrics](#8-outputs-and-metrics)
+9. [Correction models](#9-correction-models)
+10. [Limitations and next steps](#10-limitations-and-next-steps)
+
+Full derivation from the cost function to Δθ, with the code: **[LQLC_derivation.md](LQLC_derivation.md)**
+
+---
+
+## 1. Key results
+
+### Accuracy against the true position (urban, run12)
+
+The supervisor gave the true antenna position (`REF_LLA`). All runs use mask 5° and s = 5 m.
+
+| Configuration | Horizontal RMS error | Horizontal 95% | Height bias |
+|---|---:|---:|---:|
+| LS, `cor_pseudo` only | 36.3 m | 38.9 m | +29.9 m |
+| LQLC, `cor_pseudo` only | 36.3 m | 39.3 m | +27.3 m |
+| LQLC + Sagnac | **4.2 m** | **6.4 m** | +28.6 m |
+| LQLC + Sagnac + tropo + iono | 4.3 m | 7.0 m | **+10.6 m** |
+| LS + Sagnac + tropo + iono | 5.9 m | 10.3 m | +12.7 m |
+
+`cor_pseudo` only has the satellite clock corrected. The missing Sagnac term alone put every fix about 36 m East.
+The three corrections are now **always applied**.
+
+### Precision: scatter around each configuration's own mean
+
+| Dataset | Best settings | LS (H / V) | **LQLC (H / V)** | Improvement |
+|---|---|---:|---:|---|
+| Urban, `data.csv` (run8) | mask 5°, s = 5 m | 4.60 / 8.81 m | **2.51 / 4.00 m** | −45% / −55% |
+| Mid-urban, `data_midurban.csv` (run14) | mask 10°, s = 1 m | 27.05 / 29.51 m | **2.49 / 6.55 m** | −91% / −78% |
+
+H = horizontal RMS, V = vertical standard deviation. The run8 numbers were measured before the corrections were
+added; the corrections barely change the scatter.
+
+```mermaid
+flowchart LR
+    A["LS<br/>36 m off, scattered"] -->|"+ LQLC weights"| B["LQLC<br/>half the scatter,<br/>still 36 m off"]
+    B -->|"+ Sagnac"| C["4 m horizontal error"]
+    C -->|"+ tropo + iono"| D["height bias<br/>+27 → +11 m"]
 ```
 
-**Input:** a CSV with `epoch, tow, sat_const, sat_x, sat_y, sat_z, cor_pseudo`
+---
 
-## Files
+## 2. How it works
 
-| File | What it does | Output |
+### Pipeline
+
+```mermaid
+flowchart LR
+    M[(".mat from<br/>receiver")] -->|mat2csv.py| D[(data.csv)]
+    D --> S["spp_switches.py<br/>LS and LQLC, every epoch"]
+    S --> R[/"run&lt;N&gt;/<br/>fixes + comparison"/]
+    R --> V["viewer.html<br/>map"]
+    D --> W["sweep.py<br/>mask × s grid"]
+    W --> WH["sweep.html<br/>dropdowns + charts"]
+```
+
+### Per epoch
+
+Unknowns: position $x, y, z$ plus **one receiver clock per satellite system** (GPS, GLONASS, Galileo, BeiDou).
+
+$$
+\rho_i = \lVert \mathbf{p}_i - \mathbf{r} \rVert + b_{k(i)} + \underbrace{S_i + T_i + I_i}_{\text{Sagnac, tropo, iono}} + \varepsilon_i
+$$
+
+Each Gauss-Newton step solves weighted least squares:
+
+$$
+\Delta\theta = (\mathbf{H}^T W \mathbf{H})^{-1}\,\mathbf{H}^T W\,\mathbf{y}
+$$
+
+| Estimator | Cost per satellite | Weight $W_{ii}$ |
 |---|---|---|
-| `spp_switches.py` | **Main solver.** LS vs LQLC per epoch on `cor_pseudo`; settings in `BASE` | `run<N>/` |
-| `sweep.py` | Imports `spp_switches` and runs every elevation mask × LQLC `s` combination in parallel | `run<N>/` + `sweep.txt` |
-| `feasibility.py` | Imports `spp_switches`, records every satellite's SNR next to its residual, and tests whether SNR predicts bad ranges (MOMENT step 1) | `feas<N>/` |
-| `mat2csv.py` | Converts a `sppStruct` `.mat` file to the CSV layout above: `python mat2csv.py "<file>.mat" <name>.csv` | `.csv` |
-| `spp_snrgate.py` | Copy of `spp_switches` with a causal SNR gate (veto / down-weight suspects): does the gate beat LQLC alone? (MOMENT step 2) | `run<N>/` |
-| `build_viewer.py` | Map viewer for a run (called automatically) | `run<N>/viewer.html` |
-| `build_sweep.py` | Summary page for a sweep: dropdowns, charts, heatmap (called automatically) | `run<N>/sweep.html` |
-| `templates/` | The two HTML templates the builders fill in | |
-| `MOMENT-GNSS-proposal.md` | Proposal for a MOMENT pre-filter, assessed with `feasibility.py` and `spp_snrgate.py` | |
+| LS | $\tfrac12 e^2$ | $m_i$ |
+| **LQLC** | $4s^2 \ln\cosh\!\big(e/2s\big)$ | $m_i \cdot \dfrac{\tanh x_i}{x_i}$, with $x_i = \dfrac{\lvert e_i\rvert}{2s}$ |
 
-| Folder | Contents |
-|---|---|
-| `run1`, `run2` | Old correction-step runs (GPS 10° / all GNSS 15°); only their `s0_*` configs are valid |
-| `run3` | LS vs LQLC, all GNSS, 10°, s = 3 |
-| `run4` | Sweep: masks 5–20° × s 1–10 m (open `sweep.html`) |
-| `feas1` | Feasibility: SNR vs residual (`feasibility.txt`) |
-| `run7` | SNR-gate decision test |
-| `run9` | RTKLIB noise model / per-satellite `s` test |
-
----
-
-## Findings: what we tried to enhance LQLC
-
-All tests: `cor_pseudo` with **no** Sagnac/tropo/iono (we then believed it already had them), 6693 epochs, Hong Kong urban
-canyon. Numbers are **spread around each config's own mean** (precision): horizontal RMS / vertical std, in metres.
+$m_i$ is the elevation mask (1 or 0), and $e_i$ is the satellite's residual.
+LQLC behaves like LS for small errors ($\lvert e\rvert \ll 2s$) and grows only linearly for large ones. So a
+satellite with a 100 m error keeps about 10% of its weight (with s = 5) instead of dominating the solution.
 
 ```mermaid
-flowchart LR
-    LS["LS<br/>4.60 / 8.81"] -->|"robust weights"| LQ["<b>LQLC, one s</b><br/>2.51 / 4.00"]
-    LQ -->|"+ SNR jump gate"| G["2.48–2.49 / 3.94–3.98<br/>≈ same"]
-    LQ -->|"+ low-SNR veto"| V["2.80 / 3.97<br/>worse"]
-    LQ -->|"+ per-satellite s"| S["2.79 / 4.74<br/>worse"]
-    LQ -->|"+ per-sat s + 1/σ² weight"| W["2.56 / 3.80<br/>≈ draw"]
+stateDiagram-v2
+    direction LR
+    [*] --> LS : epoch start
+    LS --> LS : step ≥ 1 mm
+    LS --> LQLC : converged (estimator = LQLC)
+    LS --> Done : converged (estimator = LS)
+    LQLC --> LQLC : step ≥ 1 mm, weights recomputed
+    LQLC --> Done : converged
+    Done --> [*]
 ```
 
-| # | Idea | How | Result | Verdict |
-|---|---|---|---|---|
-| 1 | **LQLC instead of LS** | Robust `tanh(x)/x` weights after an LS start | H 4.60 → **2.51** (−45%), V 8.81 → **4.00** (−55%) | ✅ **Main gain** |
-| 2 | More satellites | GPS only → GPS + GLONASS + Galileo + BeiDou | LQLC H 4.08 → 2.72 at 10° (run1 → run3); LS barely changes | ✅ LQLC needs the redundancy |
-| 3 | Tune mask and `s` | Sweep masks 5–20° × `s` 1–10 m (run4) | Best mask 5°, `s` 3–5 m; `s` moves H by only ~0.5 m. A high mask helps LS but hurts LQLC | ✅ Constant `s` is fine |
-| 4 | SNR as a warning sign | Feasibility (feas1): SNR vs residual | Below 30°, an SNR jump > 2 dB marks 22–45% bad ranges (vs 4% average) | ✅ The signal is real |
-| 5 | SNR jump gate | Veto / down-weight such satellites before solving (run7) | LS: 95% error −43%. **LQLC: only −1 to −3%** | ⚠️ LQLC already does its job |
-| 6 | Low-SNR veto | Drop satellites with SNR ≤ 30 dB-Hz below 30° (run7) | LQLC H **+12% worse** | ❌ Removes useful satellites |
-| 7 | RTKLIB noise model | σᵢ from elevation + system as weight 1/σᵢ² (run9) | LS: H −38%. LQLC + weight + per-sat `s`: H +2%, V −5% | ⚠️ Helps LS, a draw for LQLC |
-| 8 | Per-satellite `s` | `s_i = s·σᵢ/σ_ref` (run9) | LQLC H **+11%**, V **+19% worse** | ❌ Lets bounced signals back in |
-| 9 | MOMENT pre-filter | Not built: ideas 4–5 show its room on top of LQLC is ~1–3% | – | ⏸️ Not worth it for now |
+LS runs first, because the robust weights only make sense once the residuals are small. Elevation, the mask and
+the corrections are recomputed at **every iteration** from the current position. Each epoch is solved on its own
+(snapshot); the previous fix is only the starting guess.
 
-**Conclusion.** LQLC with a single constant `s` already captures what the extra ideas try to add. SNR
-filtering and elevation noise models are genuinely useful for **LS**, but LQLC alone does better than LS with
-either of them, and adding them to LQLC changes little or makes it worse.
-
-**Why the elevation model fails here:** it assumes low satellites are noisier in a random, harmless way, which
-is true in open sky. In the urban canyon much of their extra error is bounced (multipath / NLOS) signals,
-i.e. outliers. LQLC with one `s` down-weights them; a larger per-satellite `s` relabels them as normal.
-
-**Caveats**
-- **Precision, not accuracy:** no surveyed antenna position yet (`REF_XYZ`). `mean_h` differs by a few
-  metres between configs, so a tight config could still be biased.
-- **One dataset:** one receiver, one site, one session. In open sky the noise model may help more.
-- **`s` not re-tuned for per-satellite `s`:** only `s` = 3 and 5 tried there.
-- "Doesn't help" means **"doesn't help on top of LQLC"**: ideas 5 and 7 are real improvements for LS.
-
-**Next steps:** a surveyed reference position (accuracy instead of precision), a second dataset (open sky
-or UrbanNav), and an oracle veto test (the best any pre-filter could do) to close the MOMENT question.
-
----
-
-## 1. What a run compares
-
-```mermaid
-flowchart LR
-    B["BASE<br/>systems · mask_deg · s"] --> LS["LS"]
-    B --> LQ["LQLC"]
-    LS --> R[/"run&lt;N&gt;/"/]
-    LQ --> R
-```
-
-```mermaid
-flowchart LR
-    R1["run1<br/>GPS, 10°"] -.change one setting.-> R2["run2<br/>all GNSS, 15°"] -.-> R3["run3 …"]
-```
-
-Change **one** setting per run, so any difference between runs can be traced to it. Each run's `config.json`
-records what was used.
-
-> **Sagnac, tropo and iono are always applied.** `cor_pseudo` only has the satellite clock corrected. Against the
-> supervisor's true coordinate (`REF_LLA`, run12), without them the fix sits ~36 m East and ~27 m too high; with
-> them the horizontal error is ~4 m and the height bias ~11 m. Precision (spread) barely changes, which is why
-> the earlier spread-only tests did not notice. Runs before run12 were made without them.
-
----
-
-## 2. Big picture
-
-```mermaid
-flowchart LR
-    A[(data.csv)] --> B[main]
-    B --> C{for each config<br/>in CONFIGS}
-    C --> D["cfg = BASE + estimator"]
-    D --> E["run(cfg, data)"]
-    E --> F["score(df)"]
-    F --> G[/"run&lt;N&gt;/out_config.csv"/]
-    F --> H[/"run&lt;N&gt;/comparison.csv"/]
-    C -. next config .-> C
-    G --> V["build_viewer.py"] --> VH[/"run&lt;N&gt;/viewer.html"/]
-```
-
-## 3. Per-epoch solver flow
+<details>
+<summary><b>Full solver flowchart</b></summary>
 
 ```mermaid
 flowchart TD
-    S([epoch g, previous fix θ0]) --> INIT["rho = cor_pseudo<br/>θ = [x,y,z from θ0, one clock per system]"]
+    S([epoch, previous fix θ0]) --> INIT["rho = cor_pseudo<br/>θ = [x,y,z from θ0, one clock per system]"]
     INIT --> LOOP
 
     subgraph LOOP [Iteration loop, max 2 × MAX_ITER]
@@ -154,150 +153,177 @@ flowchart TD
     OK --> NEXT["next epoch starts from this fix"]
 ```
 
-All corrections are recomputed **every iteration**, because they depend on the current position estimate.
-
-## 4. LS → LQLC switch-over
-
-```mermaid
-stateDiagram-v2
-    [*] --> LS : epoch start
-    LS --> LS : step ≥ 1 mm
-    LS --> Done : converged and estimator = LS
-    LS --> LQLC : converged and estimator = LQLC
-    LQLC --> LQLC : step ≥ 1 mm (weights recomputed)
-    LQLC --> Done : converged
-    Done --> [*]
-```
-
-LS runs first because robust weights only make sense once the residuals are small. From Earth's centre every
-residual is about 20,000 km and every satellite would get roughly the same weight.
-
----
-
-## 5. Functions
-
-```mermaid
-flowchart TB
-    main --> run --> solve_epoch
-    main --> score
-    solve_epoch --> iter_terms
-    solve_epoch --> lqlc_weight
-    iter_terms --> el_az --> ecef_to_lla
-    el_az --> enu_matrix
-    iter_terms --> sagnac
-    iter_terms --> tropo_saastamoinen --> ecef_to_lla
-    iter_terms --> iono_klobuchar --> ecef_to_lla
-    score --> ecef_to_lla
-    score --> enu_matrix
-```
-
-| Function | When it runs | What it does |
+| Function | Runs | What it does |
 |---|---|---|
-| `ecef_to_lla(p)` | helper | ECEF → geodetic lat/lon/height (WGS-84, 5 iterations) |
-| `enu_matrix(lat, lon)` | helper | Rotation from an ECEF difference to local East/North/Up |
-| `el_az(sat, rx)` | every iteration | Elevation and azimuth of each satellite from the receiver |
-| `sagnac(sat, rx)` | every iteration | Earth-rotation range term (m) |
-| `tropo_saastamoinen(el, rx)` | every iteration | Tropospheric delay (m). Returns 0 outside 0–10 km height (still converging) |
-| `iono_klobuchar(el, az, rx, tow)` | every iteration | Ionospheric L1 delay (m), default coefficients |
-| `iter_terms(...)` | every iteration | Adds up the switched-on corrections and applies the elevation mask |
-| `lqlc_weight(y, s)` | robust phase | Robust weight from the residuals |
-| `solve_epoch(g, θ0, cfg)` | per epoch | Gauss-Newton / IRLS solver |
-| `run(cfg, data)` | per config | Loops over epochs and carries each converged fix forward |
-| `score(df, ref)` | per config | Spread statistics, or error and bias when `REF_XYZ` is set |
+| `ecef_to_lla`, `lla_to_ecef` | helper | ECEF ↔ geodetic (WGS-84) |
+| `enu_matrix`, `el_az` | every iteration | Local East/North/Up, satellite elevation and azimuth |
+| `sagnac`, `tropo_saastamoinen`, `iono_klobuchar` | every iteration | The three corrections (m) |
+| `iter_terms` | every iteration | Adds up the corrections and applies the mask |
+| `lqlc_weight` | LQLC phase | $\tanh(x)/x$ |
+| `solve_epoch` | per epoch | Gauss-Newton / IRLS solver |
+| `run` | per config | Loops over epochs, carrying each converged fix forward |
+| `score` | per config | Spread, residuals and, with `REF_LLA`, error and bias |
+
+</details>
 
 ---
 
-## 6. Settings
+## 3. What we tried
 
-`BASE` holds the settings of a run. Each config is `BASE` + an estimator.
-
-| Setting | Values | Meaning |
-|---|---|---|
-| `systems` | list | `1` GPS, `4` GLONASS, `8` Galileo, `32` BeiDou. One clock unknown per system |
-| `mask_deg` | degrees | Satellites below this elevation get weight 0 |
-| `s` | metres | LQLC scale. Larger values behave more like LS |
-| `estimator` | `LS` / `LQLC` | Set by `CONFIGS`: every run solves both |
-
-Sagnac, tropo and iono have no switch: they are always on.
-
-Other settings: `REF_LLA` (true antenna lat, lon, h; enables true-error scoring; set it to `None` or the right site for another dataset), `REF_XYZ` (same as ECEF), `MAX_ITER`, `TOL`.
-
----
-
-## 7. Math
-
-### 7.1 Measurement model
-
-For satellite $i$ in constellation $k$:
-
-$$
-\rho_i = \lVert \mathbf{r}^{s}_i - \mathbf{r} \rVert + c\,\delta t_k + S_i + T_i + I_i + \varepsilon_i
-$$
-
-Unknowns: $\boldsymbol\theta = [x,\ y,\ z,\ c\delta t_{GPS},\ \dots]$. Every constellation keeps its own time, so each
-one gets its own receiver clock.
-
-### 7.2 Linearisation
+Urban dataset, measured before the corrections were added (precision only). Numbers are H / V scatter in metres.
 
 ```mermaid
 flowchart LR
-    T["θₙ (current guess)"] --> PR["predicted<br/>range + clock + corr"]
-    RHO["rho (measured)"] --> RES["y = rho − predicted"]
-    PR --> RES
-    T --> HM["H rows:<br/>[ −e_i | 0 … 1 … 0 ]"]
-    RES --> WLS["dθ = (HᵀWH)⁻¹HᵀWy"]
-    HM --> WLS
-    WLS --> T2["θₙ₊₁ = θₙ + dθ"]
+    LS["LS<br/>4.60 / 8.81"] -->|"robust weights"| LQ["<b>LQLC, one s</b><br/>2.51 / 4.00"]
+    LQ -->|"+ SNR jump gate"| G["2.48 / 3.94<br/>≈ same"]
+    LQ -->|"+ low-SNR veto"| V["2.80 / 3.97<br/>worse"]
+    LQ -->|"+ per-satellite s"| S["2.79 / 4.74<br/>worse"]
+    LQ -->|"+ per-sat s + 1/σ² weight"| W["2.56 / 3.80<br/>≈ draw"]
 ```
 
-$$
-y_i = \rho_i - \left(\lVert \mathbf{r}^{s}_i - \mathbf{r}_n \rVert + c\delta t_k + S_i + T_i + I_i\right),
-\qquad
-\mathbf{H}_i = \Big[\, -\mathbf{e}_i^\top \;\big|\; 0 \cdots 1_{(k)} \cdots 0 \,\Big],
-\qquad
-\mathbf{e}_i = \frac{\mathbf{r}^{s}_i - \mathbf{r}_n}{\lVert \mathbf{r}^{s}_i - \mathbf{r}_n \rVert}
-$$
+| # | Idea | Weight $W_{ii}$ / method | Result | Verdict |
+|---|---|---|---|---|
+| 1 | **LQLC instead of LS** | $m_i \tanh(x_i)/x_i$ after an LS start | H −45%, V −55% | ✅ **Main gain** |
+| 2 | More satellites | GPS only → GPS + GLO + GAL + BDS | LQLC H 4.08 → 2.72 m (run1 → run3); LS barely changes | ✅ LQLC needs the redundancy |
+| 3 | Tune mask and $s$ | Sweep 5–20° × $s$ 1–10 m (run4, run14) | Best depends on the environment; see [Key results](#1-key-results) | ✅ Tune per site |
+| 4 | **Sagnac, tropo, iono** | Added to the model (run12) | Horizontal error 36 → 4 m, height bias +27 → +11 m | ✅ **Always on** |
+| 5 | SNR as a warning sign | SNR vs residual (feas1) | Below 30°, an SNR jump > 2 dB marks 22–45% bad ranges (vs 4% average) | ✅ The signal is real |
+| 6 | SNR jump gate | Suspects: $W_{ii} = 0$ or ×0.1 (run7) | LS: 95% error −43%. LQLC: only −1 to −3% | ⚠️ LQLC already does this |
+| 7 | Low-SNR veto | Drop SNR ≤ 30 dB-Hz below 30° (run7) | LQLC H +12% worse | ❌ Removes useful satellites |
+| 8 | RTKLIB noise model | $m_i/\sigma_i^2$ (run9) | LS: H −38%; still behind LQLC | ⚠️ Helps LS only |
+| 9 | Per-satellite $s$ | $x_i = \lvert e_i\rvert / 2s\sigma_i$ (run9) | H +11%, V +19% worse | ❌ Lets reflected signals back in |
+| 10 | Both of 8 + 9 | $(m_i/\sigma_i^2)\tanh(x_i)/x_i$ (run9) | H +2%, V −5% | ≈ Draw, not worth it |
+| 11 | MOMENT pre-filter | Not built: idea 6 shows only ~1–3% room on top of LQLC | – | ⏸️ Not worth it now |
 
-### 7.3 Weighted least squares step
+$\sigma_i = F_{sys}\sqrt{0.3^2 + 0.3^2/\sin el_i}$ is RTKLIB's default noise model ($F$ = 1.5 for GLONASS, 1 otherwise).
 
-$$
-\Delta\boldsymbol\theta = (\mathbf{H}^\top \mathbf{W} \mathbf{H})^{-1}\mathbf{H}^\top \mathbf{W}\,\mathbf{y},
-\qquad \mathbf{W} = \operatorname{diag}(w_i)
-$$
+**Conclusion.** One constant $s$ in LQLC already captures what the SNR and elevation ideas try to add. Those ideas
+are real improvements for **LS**, but LQLC alone beats LS with any of them. The elevation model assumes that low
+satellites are noisy in a harmless, random way. In a city, much of their error comes from reflections, which are
+outliers, and LQLC handles those better with one $s$.
 
-Iterate until $\lVert \Delta\boldsymbol\theta_{xyz} \rVert < 1\ \text{mm}$.
+---
 
-```mermaid
-flowchart LR
-    M["mask<br/>el ≥ mask_deg → 1, else 0"] --> X(("×"))
-    LQ["LQLC<br/>tanh(x)/x<br/>(robust phase only)"] --> X
-    X --> W["w_i"]
+## 4. Quick start
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install numpy pandas scipy
+
+.venv/bin/python mat2csv.py "sppStruct_user copy.mat" data_midurban.csv   # .mat → CSV
+.venv/bin/python spp_switches.py data.csv          # LS + LQLC → next free run<N>/, with viewer.html
+.venv/bin/python spp_switches.py data.csv run12    # re-run run12/ from its own config.json
+.venv/bin/python sweep.py data_midurban.csv        # mask × s grid → run<N>/sweep.html
 ```
 
-### 7.4 LQLC robust estimator
+Open `run<N>/viewer.html` (map) or `run<N>/sweep.html` (sweep summary) in a browser.
 
-Instead of $\sum r_i^2$, minimise
+---
 
-$$
-J(\boldsymbol\theta) = \sum_i \ln\cosh\!\left(\frac{r_i}{2s}\right)
-$$
+## 5. Datasets
 
-| Residual size | Behaviour | Effect |
+The data files are not in git (see `.gitignore`).
+
+| File | Environment | Epochs | Satellites per epoch | GPS week | True position |
+|---|---|---:|---:|---:|---|
+| `data.csv` | Urban canyon, Hong Kong | 6693 | ~29 | 2215 | ✅ `REF_LLA` |
+| `data_midurban.csv` | Mid-urban, Hong Kong | 3861 | ~25 | 2203 | ❌ not yet |
+
+CSV columns: `epoch, week, tow, sat_id, sat_const, sat_x, sat_y, sat_z, sat_el, sat_az, sat_snr, raw_pseudo, cor_pseudo`.
+`sat_const` codes: 1 GPS, 4 GLONASS, 8 Galileo, 32 BeiDou.
+
+> When running the mid-urban data, ignore the accuracy columns (`hRMS`, `bias*`): `REF_LLA` is the urban site,
+> about 2.8 km away.
+
+---
+
+## 6. Project layout
+
+| File | Role |
+|---|---|
+| `spp_switches.py` | **Main solver.** LS vs LQLC every epoch; settings in `BASE` and `CONFIGS` |
+| `sweep.py` | Imports the solver and runs every mask × $s$ combination in parallel |
+| `mat2csv.py` | Converts a `sppStruct` `.mat` file to the CSV layout |
+| `spp_noise.py` | Imports the solver and adds RTKLIB's noise model σᵢ: ideas 8, 9 and 8+9. Own `MASK_DEG`, `S`, `REF_LLA` |
+| `sweep_noise.py` | Mask × $s$ sweep of idea 8+9 (`LQLC_sig_w_s`) only, with LS per mask as reference |
+| `feasibility.py` | Does SNR predict bad pseudoranges? (MOMENT step 1) |
+| `spp_snrgate.py` | Older solver copy with a causal SNR gate (MOMENT step 2) |
+| `build_viewer.py`, `build_sweep.py` | Build `viewer.html` / `sweep.html` from a run (called automatically) |
+| `templates/` | HTML templates for the two pages |
+| `LQLC_derivation.md` | Step-by-step math with the matching code |
+| `MOMENT-GNSS-proposal.md` | Proposal for a MOMENT anomaly pre-filter, assessed by ideas 5–6 |
+| `figures/` | Figures for reports |
+
+<details>
+<summary><b>Run folders</b></summary>
+
+| Folder | Data | Contents | Corrections |
+|---|---|---|---|
+| `run1`, `run2` | urban | Old correction-step runs (GPS 10° / all GNSS 15°) | – |
+| `run3` | urban | LS vs LQLC, all GNSS, 10°, s = 3 | off |
+| `run4` | urban | Sweep: masks 5–20° × s 1–10 m | off |
+| `feas1` | urban | SNR vs residual | off |
+| `run7` | urban | SNR-gate test | off |
+| `run8`, `run10` | urban | LS vs LQLC, mask 5°, s = 5 (the figure) | off |
+| `run9` | urban | RTKLIB noise model / per-satellite $s$ | off |
+| `run11` | urban | Sagnac test | step by step |
+| `run12` | urban | **Corrections step by step, scored against the true position** | step by step |
+| `run13` | mid-urban | Corrections step by step, mask 5°, s = 5 | step by step |
+| `run14` | mid-urban | **Sweep: masks 5–20° × s 1–10 m** | on |
+| `run15` | mid-urban | Corrections step by step, mask 10°, s = 1 | step by step |
+
+Each folder has `config.json` (exact settings), `comparison.csv` (one row per config), `out_<config>.csv`
+(one fix per epoch) and `viewer.html`.
+
+</details>
+
+---
+
+## 7. Settings
+
+All settings are at the top of `spp_switches.py`:
+
+```python
+BASE = dict(
+    systems=[1, 4, 8, 32],   # 1 GPS, 4 GLONASS, 8 Galileo, 32 BeiDou: one clock unknown each
+    mask_deg=10.0,           # satellites below this elevation get weight 0
+    estimator="LS",          # 'LS' | 'LQLC' (set per config)
+    s=1.0,                   # LQLC scale (m): larger behaves more like LS
+)
+CONFIGS = {                  # each config = BASE + these changes; all are solved in one run
+    "LS":   dict(estimator="LS"),
+    "LQLC": dict(estimator="LQLC"),
+}
+REF_LLA = (22.313095, 114.19142326, 3.0)   # true position (lat, lon, h); None = precision only
+```
+
+Sagnac, tropo and iono have no switch: they are always applied. Change one setting per run, so any difference can
+be traced to it.
+
+---
+
+## 8. Outputs and metrics
+
+| Metric | Meaning | Needs true position? |
 |---|---|---|
-| $\lvert r\rvert \ll 2s$ | $\ln\cosh u \approx u^2/2$ | Same as least squares |
-| $\lvert r\rvert \gg 2s$ | $\ln\cosh u \approx \lvert u\rvert$ | Like L1: an outlier can't dominate |
+| `h_spread`, `h95_spread` | Horizontal RMS / 95th percentile of the fixes around **their own mean** (precision) | no |
+| `v_spread` | Vertical standard deviation (precision) | no |
+| `mean_h` | Mean ellipsoidal height | no |
+| `res_rms`, `res_max` | Post-fit residuals of the satellites used: how well the measurements fit | no |
+| `hRMS`, `h95`, `vRMS` | Error against `REF_LLA` (accuracy) | yes |
+| `biasE`, `biasN`, `biasU` | Mean offset from the true position | yes |
 
-IRLS weight from the influence function $\psi(r) = \frac{1}{2s}\tanh\frac{r}{2s}$:
+**Precision is not accuracy.** A configuration can be tight and still biased: before the corrections, LQLC had a
+2.5 m scatter but sat 36 m East of the truth.
 
-$$
-w_i = \frac{\psi(r_i)}{r_i} \;\propto\; \frac{\tanh x_i}{x_i},
-\qquad x_i = \frac{\lvert r_i\rvert}{2s}
-$$
+LQLC usually has a slightly *higher* `res_rms` than LS. It leaves outliers with large residuals instead of bending
+the position toward them.
 
-$w \to 1$ for small residuals and $w \approx 2s/\lvert r\rvert$ for large ones. The constant $1/(4s^2)$ cancels in
-the normal equations.
+---
 
-### 7.5 Sagnac (always on)
+## 9. Correction models
+
+<details>
+<summary><b>Sagnac (Earth rotation)</b></summary>
 
 While the signal travels for about 70 ms, the Earth rotates under it:
 
@@ -306,7 +332,10 @@ S_i = \frac{\omega_e}{c}\left(x^{s}_i\,y_r - y^{s}_i\,x_r\right),
 \qquad \omega_e = 7.2921151467\times10^{-5}\ \text{rad/s}
 $$
 
-### 7.6 Troposphere: Saastamoinen (always on)
+</details>
+
+<details>
+<summary><b>Troposphere: Saastamoinen, standard atmosphere</b></summary>
 
 $$
 \begin{aligned}
@@ -319,17 +348,12 @@ T_i &= \frac{\text{ZHD} + \text{ZWD}}{\sin(\max(el_i,\ 1^\circ))}
 \end{aligned}
 $$
 
-### 7.7 Ionosphere: Klobuchar (always on)
+It returns 0 while the height is outside −100 m to 10 km, i.e. while still converging from Earth's centre.
 
-```mermaid
-flowchart LR
-    A["el, az, receiver lat/lon"] --> B["pierce point<br/>φ_i, λ_i"]
-    B --> C["geomagnetic lat φ_m"]
-    C --> D["amplitude A, period P<br/>(cubic in φ_m)"]
-    T["tow → local time t"] --> E
-    D --> E["cosine model<br/>day bump at 14:00"]
-    E --> F["× slant factor F<br/>× (f_L1/f)²"]
-```
+</details>
+
+<details>
+<summary><b>Ionosphere: Klobuchar, RTKLIB default coefficients</b></summary>
 
 All angles are in semicircles. $E$ is elevation and $A_z$ is azimuth:
 
@@ -351,91 +375,37 @@ I_i &= c\,F \cdot
 \end{aligned}
 $$
 
-For non-GPS systems the L1 delay is scaled by $(f_{L1}/f)^2$, with nominal frequencies for GLONASS G1, Galileo E1
-and BeiDou B1I.
+For non-GPS systems the L1 delay is scaled by $(f_{L1}/f)^2$ (GLONASS G1, Galileo E1, BeiDou B1I).
+Default coefficients are used because no navigation (BRDC) file is available. Real ones could reduce the
+remaining height bias.
 
-### 7.8 Elevation and azimuth
+</details>
 
-```mermaid
-flowchart LR
-    A["r_sat − r_rx<br/>(ECEF)"] -->|"× R(lat, lon)"| B["E, N, U"]
-    B --> C["el = atan2(U, √(E²+N²))"]
-    B --> D["az = atan2(E, N) mod 2π"]
-```
+<details>
+<summary><b>Elevation and azimuth</b></summary>
 
 $$
-\mathbf{R} =
+\begin{bmatrix} E \\ N \\ U \end{bmatrix} =
 \begin{bmatrix}
 -\sin\lambda & \cos\lambda & 0\\
 -\sin\varphi\cos\lambda & -\sin\varphi\sin\lambda & \cos\varphi\\
 \cos\varphi\cos\lambda & \cos\varphi\sin\lambda & \sin\varphi
 \end{bmatrix}
+(\mathbf{p}_i - \mathbf{r}),
+\qquad
+el = \operatorname{atan2}\!\big(U, \sqrt{E^2+N^2}\big),\quad az = \operatorname{atan2}(E, N)
 $$
 
----
-
-## 8. Scoring
-
-```mermaid
-flowchart TD
-    D["all fixes P (ECEF)"] --> Q{REF_XYZ set?}
-    Q -- no --> S1["spread around own mean (ENU)<br/>h_spread RMS, h95, v std<br/><i>= precision only</i>"]
-    Q -- yes --> S2["error vs truth (ENU)<br/>hRMS, h95, vRMS, bias E/N/U<br/><i>= accuracy</i>"]
-```
-
-Every config also records its **post-fit residuals**: for each epoch, `res_rms` and `res_max` of
-$y_i = \rho_i - \hat\rho_i$ over the satellites used, saved in `out_<config>.csv` and averaged in `comparison.csv`.
-They show how well the measurements fit the solution. LQLC usually has a slightly *higher* `res_rms` than LS,
-because it lets outliers keep their large residuals instead of bending the position toward them.
-
-Without `REF_XYZ` the table only measures **precision**: how tightly the fixes cluster. A correction mostly shifts
-the mean position, which spread can't show. Watch `mean_h`, `lat` and `lon` between runs, and set `REF_XYZ` to a
-surveyed antenna position to measure true accuracy.
+</details>
 
 ---
 
-## 9. Runs and viewer
+## 10. Limitations and next steps
 
-Every run of `spp_switches.py` gets its own folder, so earlier results are never overwritten:
-
-```
-run1/
-├── config.json        settings of every config in this run
-├── comparison.csv     one summary row per config
-├── out_LS.csv        one fix per epoch, LS
-├── out_LQLC.csv      one fix per epoch, LQLC
-└── viewer.html        built automatically at the end of the run
-run2/
-└── …
-```
-
-`build_viewer.py` takes the newest `run<N>/` (or the one you name), reads the config names from its
-`comparison.csv`, converts every `out_<config>.csv` to lat/lon/h and fills `templates/viewer_template.html`. The resulting
-`viewer.html` shows every config on a map with tracks, per-epoch values (including the residual RMS), statistics
-against a chosen reference, and, for reference, each config's spread around its own mean and its average
-residuals.
-
----
-
-## 10. Starting a new run
-
-Change one setting in `BASE`, then run again. The results go into the next `run<N>/`:
-
-```python
-BASE = dict(
-    ...
-    systems=[1, 4, 8, 32],   # e.g. run3: all GNSS
-    mask_deg=10.0,           #        back to 10°
-    s=3.0,
-)
-```
-
-To compare more than LS and LQLC in one run, add an entry to `CONFIGS`:
-
-```python
-CONFIGS = {
-    "LS":      dict(estimator="LS"),
-    "LQLC":    dict(estimator="LQLC"),
-    "LQLC_s5": dict(estimator="LQLC", s=5.0),   # → out_LQLC_s5.csv
-}
-```
+| Limitation | Next step |
+|---|---|
+| Height bias of +11 m remains | Get the BRDC navigation file for real Klobuchar coefficients; confirm what the reference height (3 m) refers to |
+| Mid-urban has no true position | Ask for its surveyed coordinate, then score accuracy as in run12 |
+| On mid-urban, the best $s$ is at the edge of the grid (1 m) | Extend the sweep to $s$ < 1 |
+| Snapshot solution, no link between epochs | A filter across epochs (e.g. Kalman) could smooth the track |
+| Two sites, one receiver | An open-sky dataset would test whether a larger $s$ is better there |

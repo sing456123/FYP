@@ -6,3 +6,8 @@ data.csv
 sppStruct_user.csv
 *.mat
 data_midurban.csv
+
+# ponytail: keep the remote lean — duplicates/raw/large
+FYP_results/
+results.*.zip
+SAISA_*.rnx

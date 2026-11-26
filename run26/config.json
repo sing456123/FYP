@@ -1,0 +1,103 @@
+{
+ "LS": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LS",
+  "s": 1.0,
+  "k": null
+ },
+ "LQLC_s1": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0,
+  "k": null
+ },
+ "LQLC_s5": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 5.0,
+  "k": null
+ },
+ "LQLC_aditer_k0.4": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0,
+  "k": 0.4,
+  "s_mode": "iter"
+ },
+ "LQLC_aditer_k0.5": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0,
+  "k": 0.5,
+  "s_mode": "iter"
+ },
+ "LQLC_aditer_k0.6": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0,
+  "k": 0.6,
+  "s_mode": "iter"
+ },
+ "LQLC_aditer_k0.75": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0,
+  "k": 0.75,
+  "s_mode": "iter"
+ },
+ "LQLC_aditer_k0.9": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 1.0,
+  "k": 0.9,
+  "s_mode": "iter"
+ }
+}

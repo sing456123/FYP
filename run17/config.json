@@ -1,0 +1,67 @@
+{
+ "LS": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LS",
+  "s": 3.0,
+  "sig_w": false,
+  "sig_s": false
+ },
+ "LQLC": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 3.0,
+  "sig_w": false,
+  "sig_s": false
+ },
+ "LS_sig_w": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LS",
+  "s": 3.0,
+  "sig_w": true,
+  "sig_s": false
+ },
+ "LQLC_sig_s": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 3.0,
+  "sig_w": false,
+  "sig_s": true
+ },
+ "LQLC_sig_w_s": {
+  "systems": [
+   1,
+   4,
+   8,
+   32
+  ],
+  "mask_deg": 10.0,
+  "estimator": "LQLC",
+  "s": 3.0,
+  "sig_w": true,
+  "sig_s": true
+ }
+}
